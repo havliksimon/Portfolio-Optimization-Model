@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}AI Analysis - Portfolio Optimizer{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">AI-Powered Portfolio Analysis</h1>
+    <p class="text-gray-600 mt-2">Leverage Large Language Models for intelligent investment insights</p>
+</div>
+
+<!-- Configuration Card -->
+<div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Portfolio Configuration</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Assets</label>
+            <textarea 
+                id="analysis-tickers" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                rows="3"
+                placeholder="Enter tickers separated by commas (e.g., AAPL, MSFT, GOOGL)"
+            >AAPL, MSFT, GOOGL, AMZN, NVDA</textarea>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Type</label>
+                <select id="analysis-type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+                    <option value="comprehensive">Comprehensive Portfolio Analysis</option>
+                    <option value="risk">Risk Factor Analysis</option>
+                    <option value="sector">Sector Allocation Review</option>
+                    <option value="esg">ESG Considerations</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Investment Horizon</label>
+                <select id="horizon" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+                    <option value="short">Short Term (&lt; 1 year)</option>
+                    <option value="medium" selected>Medium Term (1-5 years)</option>
+                    <option value="long">Long Term (5+ years)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-6">
+        <button id="run-analysis" class="bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition">
+            <i class="fas fa-brain mr-2"></i>Generate AI Analysis
+        </button>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="analysis-results" class="hidden space-y-6">
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm">Portfolio Diversity</p>
+                    <p id="diversity-score" class="text-3xl font-bold mt-1">--</p>
+                </div>
+                <i class="fas fa-project-diagram text-4xl opacity-50"></i>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm">Risk Level</p>
+                    <p id="risk-level" class="text-3xl font-bold mt-1">--</p>
+                </div>
+                <i class="fas fa-shield-alt text-4xl opacity-50"></i>
+            </div>
+        </div>
+        
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm">AI Confidence</p>
+                    <p id="ai-confidence" class="text-3xl font-bold mt-1">--</p>
+                </div>
+                <i class="fas fa-robot text-4xl opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Analysis -->
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-primary-600 to-indigo-600 px-6 py-4">
+            <h3 class="text-lg font-semibold text-white">
+                <i class="fas fa-file-alt mr-2"></i>Investment Analysis Report
+            </h3>
+        </div>
+        <div class="p-6">
+            <div id="main-analysis-content" class="prose prose-blue max-w-none">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Risk Analysis -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>Risk Factors
+            </h3>
+            <div id="risk-factors-content">
+                <!-- Content -->
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>Recommendations
+            </h3>
+            <div id="recommendations-content">
+                <!-- Content -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Market Context -->
+    <div class="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-chart-area text-primary-600 mr-2"></i>Market Context
+        </h3>
+        <div id="market-context-content" class="text-gray-700">
+            <!-- Content -->
+        </div>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loading-state" class="hidden">
+    <div class="bg-white rounded-xl shadow-lg p-12 text-center">
+        <div class="relative w-24 h-24 mx-auto mb-6">
+            <div class="absolute inset-0 border-4 border-primary-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-primary-600 rounded-full border-t-transparent animate-spin"></div>
+            <i class="fas fa-brain absolute inset-0 flex items-center justify-center text-3xl text-primary-600"></i>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">Generating Analysis</h3>
+        <p class="text-gray-600">Our AI is analyzing market data and portfolio characteristics...</p>
+        <div class="mt-4 text-sm text-gray-500" id="loading-steps">
+            <span class="step">Fetching market data</span>
+            <span class="mx-2">→</span>
+            <span class="step text-gray-300">Analyzing correlations</span>
+            <span class="mx-2">→</span>
+            <span class="step text-gray-300">Generating insights</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('run-analysis').addEventListener('click', async () => {
+    const tickers = document.getElementById('analysis-tickers').value
+        .split(',')
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t);
+    
+    if (tickers.length < 2) {
+        showToast('Please enter at least 2 tickers', 'error');
+        return;
+    }
+    
+    const button = document.getElementById('run-analysis');
+    button.disabled = true;
+    button.innerHTML = '<div class="loading-spinner inline-block mr-2"></div> Analyzing...';
+    
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('analysis-results').classList.add('hidden');
+    
+    try {
+        // First, get market data and optimize
+        const optimizeResponse = await apiCall('/api/optimize', {
+            method: 'POST',
+            body: JSON.stringify({
+                tickers: tickers,
+                method: 'max_sharpe',
+                period: '2y'
+            })
+        });
+        
+        updateLoadingSteps(1);
+        
+        // Then get AI analysis
+        const analysisResponse = await apiCall('/api/analysis/portfolio', {
+            method: 'POST',
+            body: JSON.stringify({
+                tickers: Object.keys(optimizeResponse.optimization.weights),
+                weights: optimizeResponse.optimization.weights,
+                expected_return: optimizeResponse.optimization.expected_return,
+                volatility: optimizeResponse.optimization.volatility,
+                sharpe_ratio: optimizeResponse.optimization.sharpe_ratio,
+                method: 'max_sharpe',
+                horizon: document.getElementById('horizon').value
+            })
+        });
+        
+        updateLoadingSteps(2);
+        
+        // Get risk analysis
+        const riskResponse = await apiCall('/api/analysis/risk', {
+            method: 'POST',
+            body: JSON.stringify({
+                tickers: tickers,
+                weights: optimizeResponse.optimization.weights,
+                expected_return: optimizeResponse.optimization.expected_return,
+                volatility: optimizeResponse.optimization.volatility,
+                sharpe_ratio: optimizeResponse.optimization.sharpe_ratio,
+                method: 'max_sharpe'
+            })
+        });
+        
+        displayAnalysis(analysisResponse, riskResponse, optimizeResponse);
+        
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('analysis-results').classList.remove('hidden');
+        
+        showToast('Analysis completed successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Analysis error:', error);
+        document.getElementById('loading-state').classList.add('hidden');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-brain mr-2"></i>Generate AI Analysis';
+    }
+});
+
+function updateLoadingSteps(step) {
+    const steps = document.querySelectorAll('#loading-steps .step');
+    for (let i = 0; i <= step && i < steps.length; i++) {
+        steps[i].classList.remove('text-gray-300');
+        steps[i].classList.add('text-primary-600', 'font-medium');
+    }
+}
+
+function displayAnalysis(analysis, risk, optimization) {
+    // Set metric cards
+    const weights = Object.values(optimization.optimization.weights);
+    const hhi = weights.reduce((sum, w) => sum + w * w, 0);
+    const diversity = Math.round((1 - hhi) * 100);
+    
+    document.getElementById('diversity-score').textContent = diversity + '%';
+    document.getElementById('risk-level').textContent = risk.risk_score ? 
+        (risk.risk_score > 7 ? 'High' : risk.risk_score > 4 ? 'Medium' : 'Low') : 'Medium';
+    document.getElementById('ai-confidence').textContent = 'High';
+    
+    // Main analysis
+    document.getElementById('main-analysis-content').innerHTML = formatMarkdown(analysis.summary);
+    
+    // Risk factors
+    if (risk.primary_risks) {
+        document.getElementById('risk-factors-content').innerHTML = `
+            <div class="space-y-3">
+                ${risk.primary_risks.map(r => `
+                    <div class="flex items-start space-x-3 p-3 bg-orange-50 rounded-lg">
+                        <i class="fas fa-exclamation-circle text-orange-500 mt-0.5"></i>
+                        <span class="text-gray-700 text-sm">${r}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    // Recommendations
+    if (risk.monitoring_recommendations) {
+        document.getElementById('recommendations-content').innerHTML = `
+            <ul class="space-y-2">
+                ${risk.monitoring_recommendations.map(r => `
+                    <li class="flex items-start space-x-2">
+                        <i class="fas fa-check-circle text-green-500 mt-1"></i>
+                        <span class="text-gray-700 text-sm">${r}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    }
+    
+    // Market context / method explanation
+    document.getElementById('market-context-content').innerHTML = formatMarkdown(analysis.method_explanation || '');
+}
+
+function formatMarkdown(text) {
+    if (!text) return '<p class="text-gray-500">No analysis available</p>';
+    
+    return text
+        .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-gray-900 mb-4">$1</h1>')
+        .replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-gray-900 mt-6 mb-3">$1</h2>')
+        .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-gray-900 mt-4 mb-2">$1</h3>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/^- (.*$)/gm, '<li class="ml-4 text-gray-700">$1</li>')
+        .replace(/^(?!<[hl]|<li)(.*$)/gm, '<p class="text-gray-700 mb-3">$1</p>')
+        .replace(/<\/p>\n<li/g, '</p><ul><li')
+        .replace(/<\/li>\n(?!<li)/g, '</li></ul>\n');
+}
+</script>
+{% endblock %}

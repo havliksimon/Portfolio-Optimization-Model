@@ -1,0 +1,39 @@
+# Requirements for Python 3.14 - compatible versions only
+# These packages have pre-built wheels for Python 3.14
+
+# Web Framework (pure Python)
+Flask>=3.1.0
+Flask-SQLAlchemy>=3.1.1
+Flask-Migrate>=4.0.5
+Flask-CORS>=4.0.0
+Werkzeug>=3.1.0
+
+# Database (pure Python mostly)
+SQLAlchemy>=2.0.30
+alembic>=1.13.0
+
+# AI/LLM (pure Python)
+openai>=1.30.0
+
+# Document Processing (pure Python)
+PyPDF2>=3.0.0
+openpyxl>=3.1.0
+
+# Visualization (pure Python)
+plotly>=5.20.0
+
+# Utilities (pure Python)
+python-dotenv>=1.0.0
+requests>=2.31.0
+python-dateutil>=2.9.0
+
+# NOTE: The following packages need compilation on Python 3.14
+# Install them separately with: pip install <pkg> --no-build-isolation
+# after installing: sudo pacman -S gcc gcc-fortran openblas lapack
+# - numpy
+# - pandas  
+# - scipy
+# - yfinance (depends on pandas)
+# - pdfplumber (depends on numpy/pandas)
+# - matplotlib
+# - psycopg2-binary

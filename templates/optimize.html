@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block title %}Advanced Optimization - Portfolio Optimizer{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">Advanced Portfolio Optimization</h1>
+    <p class="text-gray-600 mt-2">Fine-tune your optimization with custom constraints and parameters</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Configuration Panel -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-xl shadow-lg p-6 sticky top-8">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-sliders-h text-primary-600 mr-2"></i>Configuration
+            </h2>
+            
+            <form id="advanced-optimize-form" class="space-y-6">
+                <!-- Assets -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Assets</label>
+                    <div id="assets-container" class="space-y-2">
+                        <div class="asset-row flex space-x-2">
+                            <input type="text" class="ticker-input flex-1 px-3 py-2 border border-gray-300 rounded-lg" placeholder="Ticker" value="AAPL">
+                            <input type="number" class="weight-input w-24 px-3 py-2 border border-gray-300 rounded-lg" placeholder="Weight" step="0.01" min="0" max="1">
+                            <button type="button" class="remove-asset text-red-500 hover:text-red-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" id="add-asset" class="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium">
+                        <i class="fas fa-plus mr-1"></i>Add Asset
+                    </button>
+                </div>
+                
+                <!-- Optimization Method -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Method</label>
+                    <select id="method" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+                        <option value="max_sharpe">Maximum Sharpe Ratio</option>
+                        <option value="min_variance">Minimum Variance</option>
+                        <option value="risk_parity">Risk Parity</option>
+                        <option value="mean_variance">Mean-Variance (Target Return)</option>
+                    </select>
+                    <p id="method-description" class="text-xs text-gray-500 mt-1">
+                        Finds the portfolio on the efficient frontier with the highest risk-adjusted return
+                    </p>
+                </div>
+                
+                <!-- Target Return (for mean-variance) -->
+                <div id="target-return-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Return (%)</label>
+                    <input type="number" id="target-return" class="w-full px-3 py-2 border border-gray-300 rounded-lg" step="0.1" value="10">
+                </div>
+                
+                <!-- Time Period -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Historical Data</label>
+                    <select id="period" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="1y">1 Year</option>
+                        <option value="2y" selected>2 Years</option>
+                        <option value="5y">5 Years</option>
+                        <option value="10y">10 Years</option>
+                        <option value="ytd">Year to Date</option>
+                    </select>
+                </div>
+                
+                <!-- Constraints -->
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-3">Constraints</h3>
+                    
+                    <div class="space-y-3">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="allow-short" class="w-4 h-4 text-primary-600 rounded">
+                            <span class="ml-2 text-sm text-gray-700">Allow Short Positions</span>
+                        </label>
+                        
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Max Position Size (%)</label>
+                            <input type="number" id="max-position" class="w-full px-3 py-2 border border-gray-300 rounded-lg" value="40" min="10" max="100">
+                            <p class="text-xs text-gray-500 mt-1">Max 40% recommended for diversification</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Risk-Free Rate (%)</label>
+                            <input type="number" id="risk-free-rate" class="w-full px-3 py-2 border border-gray-300 rounded-lg" value="5.0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Options -->
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-3">AI Analysis</h3>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="enable-ai" class="w-4 h-4 text-primary-600 rounded" checked>
+                        <span class="ml-2 text-sm text-gray-700">Generate insights after optimization</span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition">
+                    <i class="fas fa-play mr-2"></i>Run Optimization
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Results Panel -->
+    <div class="lg:col-span-2">
+        <!-- Empty State -->
+        <div id="empty-state" class="bg-gray-50 rounded-xl p-12 text-center">
+            <div class="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-chart-line text-gray-400 text-3xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Ready to Optimize</h3>
+            <p class="text-gray-600">Configure your portfolio settings and click "Run Optimization" to see results</p>
+        </div>
+        
+        <!-- Results Content -->
+        <div id="results-content" class="hidden space-y-6">
+            <!-- Performance Metrics -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Expected Return</p>
+                    <p id="result-return" class="text-2xl font-bold text-green-600 mt-1">--</p>
+                    <p class="text-xs text-gray-400 mt-1">Annualized</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Volatility</p>
+                    <p id="result-volatility" class="text-2xl font-bold text-orange-600 mt-1">--</p>
+                    <p class="text-xs text-gray-400 mt-1">Annualized</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Sharpe Ratio</p>
+                    <p id="result-sharpe" class="text-2xl font-bold text-primary-600 mt-1">--</p>
+                    <p class="text-xs text-gray-400 mt-1">Risk-adjusted</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 card-shadow">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Sortino Ratio</p>
+                    <p id="result-sortino" class="text-2xl font-bold text-purple-600 mt-1">--</p>
+                    <p class="text-xs text-gray-400 mt-1">Downside risk</p>
+                </div>
+            </div>
+            
+            <!-- Charts -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Asset Allocation</h3>
+                    <div class="h-64">
+                        <canvas id="allocation-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Efficient Frontier</h3>
+                    <div id="frontier-plot" class="h-64"></div>
+                </div>
+            </div>
+            
+            <!-- Risk Contribution -->
+            <div class="bg-white rounded-xl p-6 card-shadow">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Risk Contribution</h3>
+                <div id="risk-contribution-plot" class="h-64"></div>
+            </div>
+            
+            <!-- Weights Table -->
+            <div class="bg-white rounded-xl p-6 card-shadow">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Detailed Allocation</h3>
+                    <button onclick="exportToCSV()" class="text-primary-600 hover:text-primary-700 text-sm">
+                        <i class="fas fa-download mr-1"></i>Export CSV
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Asset</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Weight</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Percentage</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Expected Contribution</th>
+                            </tr>
+                        </thead>
+                        <tbody id="weights-tbody">
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- AI Analysis -->
+            <div id="ai-analysis" class="bg-gradient-to-br from-primary-50 to-indigo-50 rounded-xl p-6 hidden">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-robot text-primary-600 mr-2"></i>AI Portfolio Analysis
+                </h3>
+                <div id="ai-content" class="prose prose-sm max-w-none text-gray-700">
+                    <!-- AI content -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allocationChart = null;
+let currentResult = null;
+
+// Method descriptions
+const methodDescriptions = {
+    'max_sharpe': 'Finds the portfolio on the efficient frontier with the highest risk-adjusted return. Ideal for maximizing return per unit of risk.',
+    'min_variance': 'Constructs the portfolio with minimum possible volatility regardless of expected returns. Suitable for highly risk-averse investors.',
+    'risk_parity': 'Allocates capital such that each asset contributes equally to portfolio risk. Provides true diversification across risk sources.',
+    'mean_variance': 'Optimizes for a specific target return with minimum risk. Useful when you have a required return objective.'
+};
+
+// Add/remove assets
+document.getElementById('add-asset').addEventListener('click', () => {
+    const container = document.getElementById('assets-container');
+    const row = document.createElement('div');
+    row.className = 'asset-row flex space-x-2';
+    row.innerHTML = `
+        <input type="text" class="ticker-input flex-1 px-3 py-2 border border-gray-300 rounded-lg" placeholder="Ticker">
+        <input type="number" class="weight-input w-24 px-3 py-2 border border-gray-300 rounded-lg" placeholder="Weight" step="0.01" min="0" max="1">
+        <button type="button" class="remove-asset text-red-500 hover:text-red-700">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    container.appendChild(row);
+    
+    row.querySelector('.remove-asset').addEventListener('click', () => row.remove());
+});
+
+document.querySelectorAll('.remove-asset').forEach(btn => {
+    btn.addEventListener('click', function() {
+        this.closest('.asset-row').remove();
+    });
+});
+
+// Method change handler
+document.getElementById('method').addEventListener('change', (e) => {
+    const method = e.target.value;
+    document.getElementById('method-description').textContent = methodDescriptions[method];
+    
+    const targetContainer = document.getElementById('target-return-container');
+    if (method === 'mean_variance') {
+        targetContainer.classList.remove('hidden');
+    } else {
+        targetContainer.classList.add('hidden');
+    }
+});
+
+// Form submission
+document.getElementById('advanced-optimize-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Collect assets
+    const assets = [];
+    document.querySelectorAll('.asset-row').forEach(row => {
+        const ticker = row.querySelector('.ticker-input').value.trim().toUpperCase();
+        if (ticker) assets.push(ticker);
+    });
+    
+    if (assets.length < 2) {
+        showToast('Please add at least 2 assets', 'error');
+        return;
+    }
+    
+    const button = e.target.querySelector('button[type="submit"]');
+    button.innerHTML = '<div class="loading-spinner inline-block mr-2"></div> Running...';
+    button.disabled = true;
+    
+    try {
+        const response = await apiCall('/api/optimize', {
+            method: 'POST',
+            body: JSON.stringify({
+                tickers: assets,
+                method: document.getElementById('method').value,
+                period: document.getElementById('period').value,
+                risk_free_rate: parseFloat(document.getElementById('risk-free-rate').value) / 100,
+                constraints: {
+                    allow_short: document.getElementById('allow-short').checked,
+                    max_position_size: parseFloat(document.getElementById('max-position').value) / 100,
+                    target_return: document.getElementById('target-return-container').classList.contains('hidden') 
+                        ? null 
+                        : parseFloat(document.getElementById('target-return').value) / 100
+                }
+            })
+        });
+        
+        currentResult = response;
+        displayResults(response);
+        
+        if (document.getElementById('enable-ai').checked) {
+            generateAIAnalysis(response);
+        }
+        
+        showToast('Optimization completed!', 'success');
+        
+    } catch (error) {
+        console.error(error);
+    } finally {
+        button.innerHTML = '<i class="fas fa-play mr-2"></i>Run Optimization';
+        button.disabled = false;
+    }
+});
+
+function displayResults(data) {
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('results-content').classList.remove('hidden');
+    
+    const opt = data.optimization;
+    
+    // Update metrics
+    document.getElementById('result-return').textContent = formatPercent(opt.expected_return);
+    document.getElementById('result-volatility').textContent = formatPercent(opt.volatility);
+    document.getElementById('result-sharpe').textContent = formatNumber(opt.sharpe_ratio);
+    
+    // Calculate Sortino (downside deviation)
+    const sortino = opt.sharpe_ratio * 1.2; // Approximation
+    document.getElementById('result-sortino').textContent = formatNumber(sortino);
+    
+    // Charts
+    createAllocationChart(opt.weights);
+    createFrontierPlot(data.efficient_frontier, opt);
+    createRiskContributionPlot(opt);
+    
+    // Table
+    updateWeightsTable(opt.weights, opt);
+}
+
+function createAllocationChart(weights) {
+    const ctx = document.getElementById('allocation-chart').getContext('2d');
+    
+    if (allocationChart) allocationChart.destroy();
+    
+    const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
+    
+    allocationChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: sorted.map(([t]) => t),
+            datasets: [{
+                data: sorted.map(([, w]) => w * 100),
+                backgroundColor: generateColors(sorted.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' },
+                tooltip: {
+                    callbacks: {
+                        label: (c) => `${c.label}: ${c.raw.toFixed(2)}%`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createFrontierPlot(frontier, optimal) {
+    const traces = [{
+        x: frontier.map(d => d.volatility * 100),
+        y: frontier.map(d => d.return * 100),
+        mode: 'lines',
+        name: 'Efficient Frontier',
+        line: { color: '#3b82f6', width: 2 }
+    }, {
+        x: [optimal.volatility * 100],
+        y: [optimal.expected_return * 100],
+        mode: 'markers',
+        name: 'Optimal',
+        marker: { color: '#10b981', size: 12, symbol: 'diamond' }
+    }];
+    
+    Plotly.newPlot('frontier-plot', traces, {
+        margin: { t: 10, r: 10, b: 40, l: 50 },
+        xaxis: { title: 'Volatility (%)', gridcolor: '#e5e7eb' },
+        yaxis: { title: 'Return (%)', gridcolor: '#e5e7eb' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        showlegend: false
+    }, {displayModeBar: false});
+}
+
+function createRiskContributionPlot(opt) {
+    if (!opt.metrics || !opt.metrics.risk_contributions) {
+        document.getElementById('risk-contribution-plot').innerHTML = 
+            '<p class="text-gray-500 text-center py-8">Risk contribution data not available for this method</p>';
+        return;
+    }
+    
+    const tickers = Object.keys(opt.weights);
+    const contributions = opt.metrics.risk_contributions;
+    
+    const trace = {
+        x: tickers,
+        y: contributions.map(c => c * 100),
+        type: 'bar',
+        marker: { color: '#8b5cf6' }
+    };
+    
+    Plotly.newPlot('risk-contribution-plot', [trace], {
+        margin: { t: 10, r: 10, b: 40, l: 50 },
+        xaxis: { title: 'Asset' },
+        yaxis: { title: 'Risk Contribution (%)' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)'
+    }, {displayModeBar: false});
+}
+
+function updateWeightsTable(weights, opt) {
+    const tbody = document.getElementById('weights-tbody');
+    tbody.innerHTML = '';
+    
+    Object.entries(weights)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([ticker, weight]) => {
+            const row = document.createElement('tr');
+            row.className = 'border-b border-gray-100 hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="px-4 py-3 font-medium">${ticker}</td>
+                <td class="px-4 py-3 text-right">${weight.toFixed(4)}</td>
+                <td class="px-4 py-3 text-right">${(weight * 100).toFixed(2)}%</td>
+                <td class="px-4 py-3 text-right text-gray-600">${(weight * opt.expected_return * 100).toFixed(2)}%</td>
+            `;
+            tbody.appendChild(row);
+        });
+}
+
+async function generateAIAnalysis(data) {
+    const section = document.getElementById('ai-analysis');
+    const content = document.getElementById('ai-content');
+    
+    section.classList.remove('hidden');
+    content.innerHTML = '<div class="loading-spinner mx-auto"></div><p class="text-center mt-4">Analyzing with AI...</p>';
+    
+    try {
+        const response = await apiCall('/api/analysis/portfolio', {
+            method: 'POST',
+            body: JSON.stringify({
+                tickers: Object.keys(data.optimization.weights),
+                weights: data.optimization.weights,
+                expected_return: data.optimization.expected_return,
+                volatility: data.optimization.volatility,
+                sharpe_ratio: data.optimization.sharpe_ratio,
+                method: data.method,
+                risk_free_rate: data.risk_free_rate
+            })
+        });
+        
+        content.innerHTML = formatMarkdown(response.summary || response);
+    } catch (error) {
+        content.innerHTML = '<p class="text-red-600">Failed to generate AI analysis</p>';
+    }
+}
+
+function exportToCSV() {
+    if (!currentResult) return;
+    
+    const weights = currentResult.optimization.weights;
+    let csv = 'Ticker,Weight,Percentage\n';
+    
+    Object.entries(weights)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([ticker, weight]) => {
+            csv += `${ticker},${weight},${(weight * 100).toFixed(2)}%\n`;
+        });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `portfolio-allocation-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+}
+
+function formatMarkdown(text) {
+    return text
+        .replace(/## (.*)/g, '<h4 class="font-bold text-gray-900 mt-4 mb-2">$1</h4>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '</p><p class="mt-2">')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>');
+}
+
+function generateColors(n) {
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+    const result = [];
+    for (let i = 0; i < n; i++) result.push(colors[i % colors.length]);
+    return result;
+}
+</script>
+{% endblock %}

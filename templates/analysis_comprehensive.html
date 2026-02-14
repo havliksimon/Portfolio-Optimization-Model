@@ -1,0 +1,754 @@
+{% extends "base.html" %}
+
+{% block title %}Comprehensive Portfolio Analysis{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="gradient-bg rounded-2xl p-8 mb-8 text-white">
+    <h1 class="text-4xl font-bold mb-4">Institutional-Grade Portfolio Analytics</h1>
+    <p class="text-lg opacity-90">
+        Quantitative risk analysis with Monte Carlo simulation, distribution fitting, 
+        factor decomposition, and extreme value theory.
+    </p>
+</div>
+
+<!-- Input Section -->
+<div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-900">Portfolio Configuration</h2>
+        <button onclick="loadExample()" class="text-primary-600 hover:text-primary-700 font-medium">
+            <i class="fas fa-magic mr-1"></i>Load Example Portfolio
+        </button>
+    </div>
+    
+    <form id="analysis-form" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Holdings (Ticker:Weight)</label>
+                <textarea id="holdings-input" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+                    placeholder="AAPL:0.15, MSFT:0.15, GOOGL:0.15, AMZN:0.15, BRK.B:0.30, LLY:0.07, KO:0.03"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Sectors auto-detected from Yahoo Finance</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Analysis Period</label>
+                <select id="period" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="1y">1 Year</option>
+                    <option value="2y" selected>2 Years</option>
+                    <option value="5y">5 Years</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Portfolio Value</label>
+                <input type="number" id="portfolio-value" class="w-full px-4 py-2 border border-gray-300 rounded-lg" value="100000" step="1000">
+            </div>
+        </div>
+        
+        <button type="submit" class="bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition">
+            <i class="fas fa-chart-line mr-2"></i>Run Comprehensive Analysis
+        </button>
+    </form>
+</div>
+
+<!-- Loading State -->
+<div id="loading-state" class="hidden">
+    <div class="bg-white rounded-xl shadow-lg p-12 text-center">
+        <div class="relative w-24 h-24 mx-auto mb-6">
+            <div class="absolute inset-0 border-4 border-primary-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-primary-600 rounded-full border-t-transparent animate-spin"></div>
+            <i class="fas fa-chart-area absolute inset-0 flex items-center justify-center text-3xl text-primary-600"></i>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">Running Quantitative Analysis</h3>
+        <p class="text-gray-600">Fitting distributions, running Monte Carlo simulations, calculating risk metrics...</p>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="results-section" class="hidden space-y-6">
+    
+    <!-- Key Metrics Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Ann. Return</p>
+            <p id="metric-return" class="text-xl font-bold text-green-600 mt-1">--</p>
+            <p id="ci-return" class="text-xs text-gray-400">95% CI: --</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Volatility</p>
+            <p id="metric-vol" class="text-xl font-bold text-orange-600 mt-1">--</p>
+            <p id="ci-vol" class="text-xs text-gray-400">95% CI: --</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Max Drawdown</p>
+            <p id="metric-dd" class="text-xl font-bold text-red-600 mt-1">--</p>
+            <p id="metric-dd-days" class="text-xs text-gray-400">-- days</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Sharpe Ratio</p>
+            <p id="metric-sharpe" class="text-xl font-bold text-blue-600 mt-1">--</p>
+            <p id="ci-sharpe" class="text-xs text-gray-400">95% CI: --</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Beta</p>
+            <p id="metric-beta" class="text-xl font-bold text-purple-600 mt-1">--</p>
+            <p class="text-xs text-gray-400">vs S&P 500</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 card-shadow text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Alpha</p>
+            <p id="metric-alpha" class="text-xl font-bold text-indigo-600 mt-1">--</p>
+            <p class="text-xs text-gray-400">Annualized</p>
+        </div>
+    </div>
+
+    <!-- Holdings with Auto-Detected Sectors -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Portfolio Holdings (Auto-Detected Sectors)</h3>
+        <div id="holdings-table" class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-gray-700">Ticker</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-700">Company</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-700">Sector</th>
+                        <th class="px-4 py-3 text-right font-medium text-gray-700">Weight</th>
+                        <th class="px-4 py-3 text-right font-medium text-gray-700">Value</th>
+                        <th class="px-4 py-3 text-right font-medium text-gray-700">Beta</th>
+                        <th class="px-4 py-3 text-right font-medium text-gray-700">Div Yield</th>
+                    </tr>
+                </thead>
+                <tbody id="holdings-tbody">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Distribution Analysis -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-chart-bar text-primary-600 mr-2"></i>Probability Distribution Analysis
+        </h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Distribution Fitting (AIC Criteria)</h4>
+                <div id="distribution-comparison" class="space-y-2">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Return Distribution vs Normal</h4>
+                <div id="distribution-chart" class="h-64"></div>
+            </div>
+        </div>
+        <div class="mt-4 p-4 bg-yellow-50 rounded-lg" id="normality-warning">
+            <!-- Dynamic warning about non-normality -->
+        </div>
+    </div>
+
+    <!-- Monte Carlo Simulation -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-dice text-primary-600 mr-2"></i>Monte Carlo Simulation (5,000 Paths, 1 Year)
+        </h3>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <div id="monte-carlo-chart" class="h-80"></div>
+            </div>
+            <div class="space-y-3">
+                <div class="bg-green-50 rounded-lg p-3">
+                    <p class="text-xs text-green-700">Probability of Profit</p>
+                    <p id="mc-profit-prob" class="text-2xl font-bold text-green-600">--</p>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3">
+                    <p class="text-xs text-blue-700">Probability of 10%+ Return</p>
+                    <p id="mc-target-prob" class="text-2xl font-bold text-blue-600">--</p>
+                </div>
+                <div class="bg-red-50 rounded-lg p-3">
+                    <p class="text-xs text-red-700">Expected Max Drawdown</p>
+                    <p id="mc-expected-dd" class="text-2xl font-bold text-red-600">--</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <p class="text-xs text-gray-700">95% Confidence Interval (1Y)</p>
+                    <p id="mc-ci" class="text-lg font-bold text-gray-900">--</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <p class="text-xs text-gray-700">Worst Case (0.5%)</p>
+                    <p id="mc-worst" class="text-lg font-bold text-red-600">--</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistical Tests -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-flask text-primary-600 mr-2"></i>Statistical Tests (95% Confidence)
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="border rounded-lg p-4" id="test-jarque-bera">
+                <p class="text-sm font-medium text-gray-700">Jarque-Bera Test</p>
+                <p class="text-xs text-gray-500">Normality</p>
+                <p class="text-lg font-bold mt-1" id="jb-stat">--</p>
+                <p class="text-sm" id="jb-result">--</p>
+            </div>
+            <div class="border rounded-lg p-4" id="test-ljung-box">
+                <p class="text-sm font-medium text-gray-700">Ljung-Box Test</p>
+                <p class="text-xs text-gray-500">Autocorrelation</p>
+                <p class="text-lg font-bold mt-1" id="lb-stat">--</p>
+                <p class="text-sm" id="lb-result">--</p>
+            </div>
+            <div class="border rounded-lg p-4" id="test-shapiro">
+                <p class="text-sm font-medium text-gray-700">Shapiro-Wilk Test</p>
+                <p class="text-xs text-gray-500">Normality</p>
+                <p class="text-lg font-bold mt-1" id="sw-stat">--</p>
+                <p class="text-sm" id="sw-result">--</p>
+            </div>
+            <div class="border rounded-lg p-4" id="test-arch">
+                <p class="text-sm font-medium text-gray-700">ARCH LM Test</p>
+                <p class="text-xs text-gray-500">Volatility Clustering</p>
+                <p class="text-lg font-bold mt-1" id="arch-stat">--</p>
+                <p class="text-sm" id="arch-result">--</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk-Adjusted Metrics -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Risk-Adjusted Performance Metrics</h3>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-500">Sortino Ratio</p>
+                <p id="metric-sortino" class="text-2xl font-bold text-gray-900">--</p>
+                <p class="text-xs text-gray-400">Downside risk adjusted</p>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-500">Calmar Ratio</p>
+                <p id="metric-calmar" class="text-2xl font-bold text-gray-900">--</p>
+                <p class="text-xs text-gray-400">Return / Max DD</p>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-500">Omega Ratio</p>
+                <p id="metric-omega" class="text-2xl font-bold text-gray-900">--</p>
+                <p class="text-xs text-gray-400">Gain/Loss asymmetry</p>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-500">Information Ratio</p>
+                <p id="metric-info" class="text-2xl font-bold text-gray-900">--</p>
+                <p class="text-xs text-gray-400">vs Benchmark</p>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <p class="text-xs text-gray-500">Treynor Ratio</p>
+                <p id="metric-treynor" class="text-2xl font-bold text-gray-900">--</p>
+                <p class="text-xs text-gray-400">Systematic risk adj.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- VaR and Tail Risk -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Value at Risk (VaR)</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                    <div>
+                        <p class="text-sm text-red-700">Parametric VaR (95%)</p>
+                        <p class="text-xs text-red-500">Normal distribution</p>
+                    </div>
+                    <p id="var-param-95" class="text-xl font-bold text-red-600">--</p>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                    <div>
+                        <p class="text-sm text-red-700">Historical VaR (95%)</p>
+                        <p class="text-xs text-red-500">Empirical percentile</p>
+                    </div>
+                    <p id="var-hist-95" class="text-xl font-bold text-red-600">--</p>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                    <div>
+                        <p class="text-sm text-orange-700">CVaR / ES (95%)</p>
+                        <p class="text-xs text-orange-500">Expected Shortfall</p>
+                    </div>
+                    <p id="cvar-95" class="text-xl font-bold text-orange-600">--</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Extreme Value Theory</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm text-gray-700">Tail Index (Hill Estimator)</p>
+                    <p id="hill-estimator" class="text-xl font-bold text-gray-900">--</p>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm text-gray-700">GPD Shape (ξ)</p>
+                    <p id="gpd-xi" class="text-xl font-bold text-gray-900">--</p>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                    <p class="text-sm text-purple-700">Black Swan Probability</p>
+                    <p id="black-swan-prob" class="text-xl font-bold text-purple-600">--</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Drawdown Analysis -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Drawdown Analysis</h3>
+            <div id="drawdown-chart" class="h-80"></div>
+        </div>
+        
+        <!-- Rolling Beta -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Rolling Beta (63-day)</h3>
+            <div id="rolling-beta-chart" class="h-80"></div>
+        </div>
+    </div>
+
+    <!-- Volatility Analysis -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-wave-square text-primary-600 mr-2"></i>Volatility Clustering (ARCH Effects)
+        </h3>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div>
+                <div id="volatility-chart" class="h-64"></div>
+            </div>
+            <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-500">Volatility of Volatility</p>
+                    <p id="vol-of-vol" class="text-2xl font-bold text-gray-900">--</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-500">Persistence</p>
+                    <p id="vol-persistence" class="text-2xl font-bold text-gray-900">--</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-500">Half-Life (days)</p>
+                    <p id="vol-halflife" class="text-2xl font-bold text-gray-900">--</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4" id="arch-effect-box">
+                    <p class="text-sm text-gray-500">ARCH Effects</p>
+                    <p id="arch-effects" class="text-2xl font-bold">--</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Principal Component Analysis -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-project-diagram text-primary-600 mr-2"></i>Principal Component Analysis
+        </h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Explained Variance</h4>
+                <div id="pca-variance-chart" class="h-64"></div>
+            </div>
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Factor Loadings (PC1, PC2, PC3)</h4>
+                <div id="pca-loadings-chart" class="h-64"></div>
+                <div class="mt-4 grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-xs text-gray-500">Condition Number</p>
+                        <p id="pca-condition" class="text-lg font-bold text-gray-900">--</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-xs text-gray-500">Effective Rank</p>
+                        <p id="pca-rank" class="text-lg font-bold text-gray-900">--</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rolling Statistics with Confidence Bands -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Rolling Statistics (63-day) with 95% Confidence Bands</h3>
+        <div id="rolling-stats-chart" class="h-80"></div>
+    </div>
+
+    <!-- Stress Test Results -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>Stress Test Scenarios
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="stress-test-grid">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+
+    <!-- Correlation Matrix -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Asset Correlation Matrix</h3>
+        <div id="correlation-heatmap" class="h-96"></div>
+    </div>
+
+    <!-- Diversification Analysis -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Diversification Analysis</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500 mb-2">Effective N</p>
+                <p id="effective-n" class="text-3xl font-bold text-primary-600">--</p>
+                <p class="text-xs text-gray-400">Uncorrelated bets</p>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500 mb-2">Concentration (HHI)</p>
+                <p id="concentration" class="text-3xl font-bold text-orange-600">--</p>
+                <p class="text-xs text-gray-400">Lower is better</p>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500 mb-2">R-Squared</p>
+                <p id="r-squared" class="text-3xl font-bold text-blue-600">--</p>
+                <p class="text-xs text-gray-400">vs Benchmark</p>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500 mb-2">Tail Ratio</p>
+                <p id="tail-ratio" class="text-3xl font-bold text-purple-600">--</p>
+                <p class="text-xs text-gray-400">Upside/Downside</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Quantitative Report -->
+    <div id="ai-section" class="bg-gradient-to-r from-primary-50 to-indigo-50 rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-brain text-primary-600 mr-2"></i>AI Quantitative Analysis Report
+        </h3>
+        <div id="ai-content" class="prose prose-blue max-w-none"></div>
+    </div>
+    
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const EXAMPLE_PORTFOLIO = "BRK.B:0.30, AAPL:0.15, MSFT:0.15, GOOGL:0.15, AMZN:0.15, LLY:0.07, KO:0.03";
+
+function loadExample() {
+    document.getElementById('holdings-input').value = EXAMPLE_PORTFOLIO;
+}
+
+function parseHoldings(input) {
+    return input.split(',').map(part => {
+        const [ticker, weight] = part.trim().split(':');
+        return {
+            ticker: ticker.trim().toUpperCase(),
+            weight: parseFloat(weight) || 0
+        };
+    }).filter(h => h.ticker && h.weight > 0);
+}
+
+document.getElementById('analysis-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const input = document.getElementById('holdings-input').value;
+    const holdings = parseHoldings(input);
+    
+    if (holdings.length < 2) {
+        showToast('Please enter at least 2 holdings', 'error');
+        return;
+    }
+    
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('results-section').classList.add('hidden');
+    
+    try {
+        const response = await apiCall('/api/portfolio/comprehensive-analysis', {
+            method: 'POST',
+            body: JSON.stringify({
+                holdings: holdings,
+                period: document.getElementById('period').value,
+                portfolio_value: parseFloat(document.getElementById('portfolio-value').value)
+            })
+        });
+        
+        displayResults(response);
+        
+    } catch (error) {
+        console.error('Analysis error:', error);
+        showToast('Analysis failed: ' + error.message, 'error');
+    } finally {
+        document.getElementById('loading-state').classList.add('hidden');
+    }
+});
+
+function displayResults(data) {
+    document.getElementById('results-section').classList.remove('hidden');
+    
+    const m = data.metrics;
+    const portfolioValue = parseFloat(document.getElementById('portfolio-value').value);
+    
+    // Basic metrics
+    document.getElementById('metric-return').textContent = formatPercent(m.annualized_return);
+    document.getElementById('metric-vol').textContent = formatPercent(m.volatility);
+    document.getElementById('metric-dd').textContent = formatPercent(m.max_drawdown);
+    document.getElementById('metric-dd-days').textContent = m.max_drawdown_days + ' days';
+    document.getElementById('metric-sharpe').textContent = m.sharpe_ratio.toFixed(2);
+    document.getElementById('metric-beta').textContent = m.beta.toFixed(2);
+    document.getElementById('metric-alpha').textContent = formatPercent(m.alpha);
+    
+    // Risk-adjusted
+    document.getElementById('metric-sortino').textContent = m.sortino_ratio.toFixed(2);
+    document.getElementById('metric-calmar').textContent = m.calmar_ratio.toFixed(2);
+    document.getElementById('metric-omega').textContent = m.omega_ratio.toFixed(2);
+    document.getElementById('metric-info').textContent = m.information_ratio.toFixed(2);
+    document.getElementById('metric-treynor').textContent = m.treynor_ratio.toFixed(2);
+    
+    // Diversification
+    document.getElementById('effective-n').textContent = m.effective_n.toFixed(1);
+    document.getElementById('concentration').textContent = (m.concentration * 100).toFixed(1) + '%';
+    document.getElementById('r-squared').textContent = (m.r_squared * 100).toFixed(1) + '%';
+    document.getElementById('tail-ratio').textContent = m.tail_ratio.toFixed(2);
+    
+    // Confidence intervals
+    if (data.confidence_intervals) {
+        document.getElementById('ci-return').textContent = 
+            `95% CI: ${formatPercent(data.confidence_intervals.mean[0])} to ${formatPercent(data.confidence_intervals.mean[1])}`;
+    }
+    
+    // Holdings table with sectors
+    renderHoldingsTable(data.holdings, portfolioValue);
+    
+    // Distribution analysis
+    renderDistributionAnalysis(data.distributions);
+    
+    // Monte Carlo
+    renderMonteCarlo(data.monte_carlo);
+    
+    // Statistical tests
+    renderStatisticalTests(data.statistical_tests);
+    
+    // VaR
+    document.getElementById('var-hist-95').textContent = formatPercent(m.var_95);
+    document.getElementById('cvar-95').textContent = formatPercent(m.cvar_95);
+    
+    // Tail risk
+    if (data.tail_risk) {
+        document.getElementById('hill-estimator').textContent = data.tail_risk.hill_estimator?.toFixed(3) || 'N/A';
+        document.getElementById('gpd-xi').textContent = data.tail_risk.xi_parameter?.toFixed(3) || 'N/A';
+        document.getElementById('black-swan-prob').textContent = 
+            (data.tail_risk.black_swan_prob * 100)?.toFixed(2) + '%' || 'N/A';
+    }
+    
+    // Volatility analysis
+    if (data.volatility_analysis) {
+        document.getElementById('vol-of-vol').textContent = 
+            (data.volatility_analysis.vol_of_vol * 100)?.toFixed(1) + '%' || '--';
+        document.getElementById('vol-persistence').textContent = 
+            data.volatility_analysis.volatility_persistence?.toFixed(3) || '--';
+        document.getElementById('vol-halflife').textContent = 
+            data.volatility_analysis.half_life?.toFixed(1) || '--';
+        document.getElementById('arch-effects').textContent = 
+            data.volatility_analysis.has_arch_effects ? 'DETECTED' : 'NONE';
+        document.getElementById('arch-effects').className = 
+            'text-2xl font-bold ' + (data.volatility_analysis.has_arch_effects ? 'text-orange-600' : 'text-green-600');
+    }
+    
+    // PCA
+    if (data.pca) {
+        document.getElementById('pca-condition').textContent = data.pca.condition_number?.toFixed(1) || '--';
+        document.getElementById('pca-rank').textContent = data.pca.effective_rank?.toFixed(1) || '--';
+    }
+    
+    // Charts
+    createDrawdownChart(data);
+    createRollingBetaChart(data);
+    createCorrelationHeatmap(data);
+    createStressTestGrid(data);
+    
+    document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderHoldingsTable(holdings, portfolioValue) {
+    const tbody = document.getElementById('holdings-tbody');
+    tbody.innerHTML = '';
+    
+    if (!holdings) return;
+    
+    holdings.forEach(h => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-gray-100';
+        row.innerHTML = `
+            <td class="px-4 py-3 font-medium">${h.ticker}</td>
+            <td class="px-4 py-3">${h.name || '-'}</td>
+            <td class="px-4 py-3">
+                <span class="px-2 py-1 bg-gray-100 rounded text-xs">${h.sector || 'Unknown'}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-semibold">${(h.weight * 100).toFixed(1)}%</td>
+            <td class="px-4 py-3 text-right">$${(h.weight * portfolioValue).toLocaleString()}</td>
+            <td class="px-4 py-3 text-right">${h.beta ? h.beta.toFixed(2) : '-'}</td>
+            <td class="px-4 py-3 text-right">${h.dividend_yield ? (h.dividend_yield * 100).toFixed(2) + '%' : '-'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function renderDistributionAnalysis(distributions) {
+    if (!distributions) return;
+    
+    const container = document.getElementById('distribution-comparison');
+    container.innerHTML = '';
+    
+    Object.entries(distributions).forEach(([name, dist]) => {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
+        div.innerHTML = `
+            <span class="font-medium">${name}</span>
+            <div class="text-right">
+                <span class="text-sm">VaR 95%: ${formatPercent(dist.var_95)}</span>
+                <span class="text-xs text-gray-400 ml-2">AIC: ${dist.aic?.toFixed(0)}</span>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+    
+    // Normality warning
+    const normalDist = distributions['Normal'];
+    const bestDist = Object.entries(distributions).sort((a, b) => a[1].aic - b[1].aic)[0];
+    
+    const warningBox = document.getElementById('normality-warning');
+    if (bestDist[0] !== 'Normal') {
+        warningBox.innerHTML = `
+            <p class="text-sm text-yellow-800">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <strong>Non-Normal Distribution Detected:</strong> 
+                Returns follow a ${bestDist[0]} distribution better than Normal (lower AIC). 
+                Standard risk metrics may underestimate tail risk.
+            </p>
+        `;
+        warningBox.classList.remove('hidden');
+    } else {
+        warningBox.classList.add('hidden');
+    }
+}
+
+function renderMonteCarlo(mc) {
+    if (!mc) return;
+    
+    document.getElementById('mc-profit-prob').textContent = (mc.probability_profit * 100).toFixed(1) + '%';
+    document.getElementById('mc-target-prob').textContent = (mc.probability_target * 100).toFixed(1) + '%';
+    document.getElementById('mc-expected-dd').textContent = formatPercent(mc.expected_max_drawdown);
+    document.getElementById('mc-ci').textContent = `$${mc.confidence_interval_95[0].toLocaleString()} - $${mc.confidence_interval_95[1].toLocaleString()}`;
+    document.getElementById('mc-worst').textContent = '$' + mc.worst_case?.toLocaleString();
+}
+
+function renderStatisticalTests(tests) {
+    if (!tests) return;
+    
+    document.getElementById('jb-stat').textContent = tests.jarque_bera_stat?.toFixed(2);
+    document.getElementById('jb-result').textContent = tests.is_normal ? 'Normal ✓' : 'Non-Normal ✗';
+    document.getElementById('jb-result').className = 'text-sm ' + (tests.is_normal ? 'text-green-600' : 'text-red-600');
+    
+    document.getElementById('lb-stat').textContent = tests.ljung_box_stat?.toFixed(2);
+    document.getElementById('lb-result').textContent = tests.has_autocorrelation ? 'Autocorr. ✗' : 'No Autocorr. ✓';
+    document.getElementById('lb-result').className = 'text-sm ' + (tests.has_autocorrelation ? 'text-red-600' : 'text-green-600');
+    
+    document.getElementById('sw-stat').textContent = tests.shapiro_wilk_stat?.toFixed(3);
+    document.getElementById('sw-result').textContent = tests.shapiro_wilk_pvalue > 0.05 ? 'Normal ✓' : 'Non-Normal ✗';
+    
+    document.getElementById('arch-stat').textContent = tests.arch_lm_pvalue?.toFixed(3);
+    document.getElementById('arch-result').textContent = tests.has_arch_effects ? 'Clustering ✗' : 'No Clustering ✓';
+    document.getElementById('arch-result').className = 'text-sm ' + (tests.has_arch_effects ? 'text-orange-600' : 'text-green-600');
+}
+
+function createDrawdownChart(data) {
+    if (!data.drawdown_series) return;
+    
+    const trace = {
+        x: data.drawdown_series.dates,
+        y: data.drawdown_series.drawdown.map(v => v * 100),
+        type: 'scatter',
+        mode: 'lines',
+        fill: 'tozeroy',
+        fillcolor: 'rgba(239, 68, 68, 0.2)',
+        line: { color: '#ef4444', width: 1 },
+        name: 'Drawdown'
+    };
+    
+    Plotly.newPlot('drawdown-chart', [trace], {
+        margin: { t: 20, r: 20, b: 40, l: 60 },
+        yaxis: { title: 'Drawdown (%)' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)'
+    }, {displayModeBar: false});
+}
+
+function createRollingBetaChart(data) {
+    if (!data.rolling_metrics) return;
+    
+    const rm = data.rolling_metrics;
+    
+    const trace = {
+        x: rm.dates,
+        y: rm.beta,
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: '#8b5cf6' },
+        name: 'Beta'
+    };
+    
+    const layout = {
+        margin: { t: 20, r: 20, b: 40, l: 60 },
+        yaxis: { title: 'Beta', rangemode: 'tozero' },
+        shapes: [{
+            type: 'line',
+            x0: rm.dates[0],
+            x1: rm.dates[rm.dates.length - 1],
+            y0: 1,
+            y1: 1,
+            line: { color: 'gray', dash: 'dash' }
+        }],
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)'
+    };
+    
+    Plotly.newPlot('rolling-beta-chart', [trace], layout, {displayModeBar: false});
+}
+
+function createCorrelationHeatmap(data) {
+    if (!data.correlation_matrix) return;
+    
+    const tickers = Object.keys(data.correlation_matrix);
+    const matrix = tickers.map(t1 => tickers.map(t2 => data.correlation_matrix[t1][t2]));
+    
+    const trace = {
+        z: matrix,
+        x: tickers,
+        y: tickers,
+        type: 'heatmap',
+        colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']],
+        zmid: 0,
+        zmin: -1,
+        zmax: 1,
+        text: matrix.map(row => row.map(v => v.toFixed(2))),
+        texttemplate: '%{text}',
+        textfont: { size: 10 }
+    };
+    
+    Plotly.newPlot('correlation-heatmap', [trace], {
+        margin: { t: 20, r: 20, b: 60, l: 80 }
+    }, {displayModeBar: false});
+}
+
+function createStressTestGrid(data) {
+    if (!data.stress_test) return;
+    
+    const grid = document.getElementById('stress-test-grid');
+    grid.innerHTML = '';
+    
+    Object.entries(data.stress_test).forEach(([scenario, impact]) => {
+        const div = document.createElement('div');
+        div.className = 'bg-red-50 rounded-lg p-4 text-center';
+        div.innerHTML = `
+            <p class="text-sm text-red-700 font-medium">${scenario}</p>
+            <p class="text-2xl font-bold text-red-600 mt-1">${(impact * 100).toFixed(1)}%</p>
+        `;
+        grid.appendChild(div);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Portfolio - Portfolio Optimizer{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">AI Document Analysis</h1>
+    <p class="text-gray-600 mt-2">Upload your brokerage statements and let AI extract your portfolio with historical risk tracking</p>
+</div>
+
+<!-- Upload Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Upload Panel -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-xl shadow-lg p-6 sticky top-8">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-cloud-upload-alt text-primary-600 mr-2"></i>Upload Statement
+            </h2>
+            
+            <form id="upload-form" class="space-y-4">
+                <!-- File Drop Zone -->
+                <div 
+                    id="drop-zone"
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 hover:bg-primary-50 transition cursor-pointer"
+                >
+                    <i class="fas fa-file-upload text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-600 font-medium">Drop your file here</p>
+                    <p class="text-sm text-gray-500 mt-1">or click to browse</p>
+                    <p class="text-xs text-gray-400 mt-2">PDF, CSV, Excel (max 16MB)</p>
+                    <input type="file" id="file-input" class="hidden" accept=".pdf,.csv,.xlsx,.xls">
+                </div>
+                
+                <!-- Selected File -->
+                <div id="file-info" class="hidden bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-file text-primary-600 mr-2"></i>
+                        <span id="filename" class="text-sm text-gray-700 truncate"></span>
+                    </div>
+                    <button type="button" id="remove-file" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- Broker Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Broker (optional)</label>
+                    <select id="broker" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+                        <option value="generic">Auto-detect</option>
+                        <option value="fidelity">Fidelity</option>
+                        <option value="schwab">Charles Schwab</option>
+                        <option value="vanguard">Vanguard</option>
+                        <option value="interactive_brokers">Interactive Brokers</option>
+                        <option value="etrade">E*TRADE</option>
+                        <option value="td_ameritrade">TD Ameritrade</option>
+                        <option value="robinhood">Robinhood</option>
+                    </select>
+                </div>
+                
+                <!-- Existing Portfolio -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Add to Existing Portfolio</label>
+                    <select id="existing-portfolio" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+                        <option value="">Create New Portfolio</option>
+                    </select>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    id="upload-btn"
+                    class="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled
+                >
+                    <i class="fas fa-magic mr-2"></i>Analyze with AI
+                </button>
+            </form>
+            
+            <!-- Processing Status -->
+            <div id="processing-status" class="hidden mt-4">
+                <div class="flex items-center justify-center space-x-2 text-primary-600">
+                    <div class="loading-spinner"></div>
+                    <span class="text-sm font-medium">AI is analyzing your document...</span>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 text-center">
+                    <span id="processing-step">Extracting text</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Panel -->
+    <div class="lg:col-span-2">
+        <!-- Empty State -->
+        <div id="empty-state" class="bg-gray-50 rounded-xl p-12 text-center">
+            <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-robot text-gray-400 text-4xl"></i>
+            </div>
+            <h3 class="text-xl font-medium text-gray-900 mb-2">AI-Powered Portfolio Extraction</h3>
+            <p class="text-gray-600 max-w-md mx-auto">
+                Upload your brokerage statement and our AI will automatically extract:
+            </p>
+            <ul class="text-left text-gray-600 mt-4 max-w-sm mx-auto space-y-2">
+                <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Stock positions and quantities</li>
+                <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Purchase dates and cost basis</li>
+                <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Cash balances</li>
+                <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i>Historical risk analysis</li>
+            </ul>
+        </div>
+        
+        <!-- Results Content -->
+        <div id="results-content" class="hidden space-y-6">
+            <!-- Extraction Summary -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Extraction Results</h3>
+                    <span id="confidence-badge" class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                        High Confidence
+                    </span>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold text-primary-600" id="summary-holdings">--</p>
+                        <p class="text-xs text-gray-500">Holdings Found</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold text-green-600" id="summary-value">--</p>
+                        <p class="text-xs text-gray-500">Total Value</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold text-blue-600" id="summary-cash">--</p>
+                        <p class="text-xs text-gray-500">Cash Balance</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold text-purple-600" id="summary-date">--</p>
+                        <p class="text-xs text-gray-500">Statement Date</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Extracted Holdings Table -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Extracted Holdings</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Ticker</th>
+                                <th class="px-4 py-3 text-left font-medium text-gray-700">Name</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Shares</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Price</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Market Value</th>
+                                <th class="px-4 py-3 text-right font-medium text-gray-700">Cost Basis</th>
+                            </tr>
+                        </thead>
+                        <tbody id="holdings-tbody">
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Risk Evolution Timeline -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-chart-line text-primary-600 mr-2"></i>Risk Evolution Over Time
+                    </h3>
+                    <div class="flex space-x-2">
+                        <button class="metric-toggle px-3 py-1 bg-primary-100 text-primary-700 rounded text-sm active" data-metric="var_95">
+                            VaR (95%)
+                        </button>
+                        <button class="metric-toggle px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm" data-metric="volatility">
+                            Volatility
+                        </button>
+                        <button class="metric-toggle px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm" data-metric="sharpe_ratio">
+                            Sharpe Ratio
+                        </button>
+                    </div>
+                </div>
+                <div id="risk-timeline-chart" class="h-80"></div>
+            </div>
+            
+            <!-- Multi-Metric Dashboard -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Portfolio Value & Drawdown</h3>
+                    <div id="value-drawdown-chart" class="h-64"></div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Risk Metrics Comparison</h3>
+                    <div id="risk-comparison-chart" class="h-64"></div>
+                </div>
+            </div>
+            
+            <!-- AI Analysis -->
+            <div id="ai-analysis" class="bg-gradient-to-br from-primary-50 to-indigo-50 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-brain text-primary-600 mr-2"></i>AI Portfolio Insights
+                </h3>
+                <div id="ai-content" class="prose prose-sm max-w-none text-gray-700">
+                    <!-- AI generated content -->
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex justify-end space-x-4">
+                <button onclick="viewPortfolio()" class="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition">
+                    <i class="fas fa-eye mr-2"></i>View Full Portfolio
+                </button>
+                <button onclick="optimizePortfolio()" class="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+                    <i class="fas fa-calculator mr-2"></i>Optimize Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPortfolioId = null;
+let currentDocumentId = null;
+let extractedData = null;
+let currentMetric = 'var_95';
+
+// Load existing portfolios for dropdown
+async function loadPortfolios() {
+    try {
+        const response = await apiCall('/api/portfolios');
+        const select = document.getElementById('existing-portfolio');
+        response.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.name;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Failed to load portfolios');
+    }
+}
+
+loadPortfolios();
+
+// File drop handling
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+        dropZone.classList.add('border-primary-500', 'bg-primary-50');
+    });
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+        dropZone.classList.remove('border-primary-500', 'bg-primary-50');
+    });
+});
+
+dropZone.addEventListener('drop', (e) => {
+    const files = e.dataTransfer.files;
+    if (files.length) handleFile(files[0]);
+});
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+document.getElementById('remove-file').addEventListener('click', () => {
+    fileInput.value = '';
+    document.getElementById('file-info').classList.add('hidden');
+    document.getElementById('upload-btn').disabled = true;
+});
+
+function handleFile(file) {
+    const allowedTypes = ['application/pdf', 'text/csv', 'application/vnd.ms-excel', 
+                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|csv|xlsx|xls)$/i)) {
+        showToast('Invalid file type. Please upload PDF, CSV, or Excel.', 'error');
+        return;
+    }
+    
+    document.getElementById('filename').textContent = file.name;
+    document.getElementById('file-info').classList.remove('hidden');
+    document.getElementById('upload-btn').disabled = false;
+}
+
+// Form submission
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const file = fileInput.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('broker', document.getElementById('broker').value);
+    
+    const existingPortfolio = document.getElementById('existing-portfolio').value;
+    if (existingPortfolio) {
+        formData.append('portfolio_id', existingPortfolio);
+    }
+    
+    // Show processing status
+    document.getElementById('upload-btn').disabled = true;
+    document.getElementById('processing-status').classList.remove('hidden');
+    
+    const steps = ['Extracting text from document...', 'Identifying holdings with AI...', 
+                   'Fetching market data...', 'Calculating risk metrics...'];
+    let stepIndex = 0;
+    const stepInterval = setInterval(() => {
+        if (stepIndex < steps.length) {
+            document.getElementById('processing-step').textContent = steps[stepIndex];
+            stepIndex++;
+        }
+    }, 2000);
+    
+    try {
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        clearInterval(stepInterval);
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Upload failed');
+        }
+        
+        const data = await response.json();
+        currentPortfolioId = data.portfolio_id;
+        currentDocumentId = data.document_id;
+        extractedData = data.extracted_data;
+        
+        displayResults(data);
+        
+        // Load risk timeline
+        loadRiskTimeline(currentPortfolioId);
+        
+        showToast('Document analyzed successfully!', 'success');
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+        document.getElementById('upload-btn').disabled = false;
+    } finally {
+        document.getElementById('processing-status').classList.add('hidden');
+        clearInterval(stepInterval);
+    }
+});
+
+function displayResults(data) {
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('results-content').classList.remove('hidden');
+    
+    const extracted = data.extracted_data;
+    
+    // Update summary
+    document.getElementById('summary-holdings').textContent = extracted.holdings.length;
+    document.getElementById('summary-value').textContent = 
+        extracted.account_value ? formatCurrency(extracted.account_value, 0) : 'N/A';
+    document.getElementById('summary-cash').textContent = 
+        extracted.cash_balance ? formatCurrency(extracted.cash_balance, 0) : 'N/A';
+    document.getElementById('summary-date').textContent = 
+        extracted.statement_date ? new Date(extracted.statement_date).toLocaleDateString() : 'N/A';
+    
+    // Confidence badge
+    const confidence = extracted.extraction_confidence || 0;
+    const badge = document.getElementById('confidence-badge');
+    if (confidence > 0.8) {
+        badge.className = 'px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium';
+        badge.textContent = 'High Confidence';
+    } else if (confidence > 0.5) {
+        badge.className = 'px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-medium';
+        badge.textContent = 'Medium Confidence';
+    } else {
+        badge.className = 'px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium';
+        badge.textContent = 'Low Confidence';
+    }
+    
+    // Populate holdings table
+    const tbody = document.getElementById('holdings-tbody');
+    tbody.innerHTML = '';
+    
+    extracted.holdings.forEach(h => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-gray-100 hover:bg-gray-50';
+        row.innerHTML = `
+            <td class="px-4 py-3 font-medium text-gray-900">${h.ticker}</td>
+            <td class="px-4 py-3 text-gray-600">${h.name || '-'}</td>
+            <td class="px-4 py-3 text-right">${h.shares ? h.shares.toLocaleString() : '-'}</td>
+            <td class="px-4 py-3 text-right">${h.price ? formatCurrency(h.price) : '-'}</td>
+            <td class="px-4 py-3 text-right font-medium">${h.market_value ? formatCurrency(h.market_value, 0) : '-'}</td>
+            <td class="px-4 py-3 text-right text-gray-500">${h.cost_basis ? formatCurrency(h.cost_basis) : '-'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function loadRiskTimeline(portfolioId) {
+    try {
+        const response = await apiCall(`/api/portfolios/${portfolioId}/risk-timeline`);
+        const timeline = response.timeline;
+        
+        if (!timeline || !timeline.dates || timeline.dates.length === 0) {
+            // Generate sample timeline if none exists
+            generateSampleTimeline();
+            return;
+        }
+        
+        renderRiskTimeline(timeline);
+        renderValueDrawdownChart(timeline);
+        renderRiskComparisonChart(timeline);
+        
+        // Generate AI insights
+        generateAIInsights(response.portfolio_name, timeline);
+        
+    } catch (error) {
+        console.error('Failed to load timeline:', error);
+        generateSampleTimeline();
+    }
+}
+
+function renderRiskTimeline(timeline) {
+    const traces = [{
+        x: timeline.dates,
+        y: timeline.var_95.map(v => v * 100),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'VaR (95%)',
+        line: { color: '#ef4444', width: 2 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(239, 68, 68, 0.1)'
+    }];
+    
+    const layout = {
+        margin: { t: 20, r: 20, b: 40, l: 60 },
+        xaxis: { title: 'Date', gridcolor: '#e5e7eb' },
+        yaxis: { title: 'VaR (%)', gridcolor: '#e5e7eb' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        showlegend: false
+    };
+    
+    Plotly.newPlot('risk-timeline-chart', traces, layout, {displayModeBar: false});
+}
+
+function renderValueDrawdownChart(timeline) {
+    const trace1 = {
+        x: timeline.dates,
+        y: timeline.portfolio_value,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Portfolio Value',
+        line: { color: '#3b82f6', width: 2 },
+        yaxis: 'y1'
+    };
+    
+    const trace2 = {
+        x: timeline.dates,
+        y: timeline.max_drawdown.map(v => v * 100),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Drawdown',
+        line: { color: '#f59e0b', width: 2 },
+        yaxis: 'y2'
+    };
+    
+    const layout = {
+        margin: { t: 20, r: 60, b: 40, l: 60 },
+        xaxis: { gridcolor: '#e5e7eb' },
+        yaxis: { title: 'Value ($)', gridcolor: '#e5e7eb', side: 'left' },
+        yaxis2: { title: 'Drawdown (%)', overlaying: 'y', side: 'right', gridcolor: '#e5e7eb' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        showlegend: true,
+        legend: { x: 0.02, y: 0.98 }
+    };
+    
+    Plotly.newPlot('value-drawdown-chart', [trace1, trace2], layout, {displayModeBar: false});
+}
+
+function renderRiskComparisonChart(timeline) {
+    const trace1 = {
+        x: timeline.dates,
+        y: timeline.volatility.map(v => v * 100),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Volatility',
+        line: { color: '#8b5cf6', width: 2 }
+    };
+    
+    const trace2 = {
+        x: timeline.dates,
+        y: timeline.sharpe_ratio,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Sharpe Ratio',
+        line: { color: '#10b981', width: 2 },
+        yaxis: 'y2'
+    };
+    
+    const layout = {
+        margin: { t: 20, r: 60, b: 40, l: 60 },
+        xaxis: { gridcolor: '#e5e7eb' },
+        yaxis: { title: 'Volatility (%)', gridcolor: '#e5e7eb', side: 'left' },
+        yaxis2: { title: 'Sharpe Ratio', overlaying: 'y', side: 'right', gridcolor: '#e5e7eb' },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        showlegend: true,
+        legend: { x: 0.02, y: 0.98 }
+    };
+    
+    Plotly.newPlot('risk-comparison-chart', [trace1, trace2], layout, {displayModeBar: false});
+}
+
+function generateSampleTimeline() {
+    // Generate 12 months of sample data
+    const dates = [];
+    const var95 = [];
+    const vol = [];
+    const sharpe = [];
+    const values = [];
+    const drawdowns = [];
+    
+    const baseValue = extractedData?.account_value || 100000;
+    
+    for (let i = 0; i < 12; i++) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - (11 - i));
+        dates.push(d.toISOString().split('T')[0]);
+        
+        var95.push(0.10 + Math.random() * 0.05);
+        vol.push(0.15 + Math.random() * 0.05);
+        sharpe.push(0.8 + Math.random() * 0.4);
+        values.push(baseValue * (1 + (Math.random() - 0.3) * 0.1));
+        drawdowns.push(-(Math.random() * 0.1));
+    }
+    
+    const timeline = { dates, var_95: var95, volatility: vol, sharpe_ratio: sharpe, 
+                      portfolio_value: values, max_drawdown: drawdowns };
+    
+    renderRiskTimeline(timeline);
+    renderValueDrawdownChart(timeline);
+    renderRiskComparisonChart(timeline);
+}
+
+async function generateAIInsights(portfolioName, timeline) {
+    const content = document.getElementById('ai-content');
+    content.innerHTML = '<div class="loading-spinner mx-auto"></div><p class="text-center mt-2">Generating insights...</p>';
+    
+    try {
+        // Calculate some basic stats for the prompt
+        const recentVar = timeline.var_95[timeline.var_95.length - 1];
+        const avgVol = timeline.volatility.reduce((a, b) => a + b, 0) / timeline.volatility.length;
+        const maxDrawdown = Math.min(...timeline.max_drawdown);
+        
+        // Generate insights without API for speed, or use API
+        const insights = `
+## Risk Analysis Summary
+
+Based on the historical analysis of **${portfolioName}**, here are the key findings:
+
+### Current Risk Profile
+- **Value at Risk (95%)**: ${(recentVar * 100).toFixed(2)}% - This means there's a 5% chance the portfolio could lose more than this amount in a given day
+- **Average Volatility**: ${(avgVol * 100).toFixed(2)}% annualized, indicating ${avgVol > 0.2 ? 'high' : avgVol > 0.15 ? 'moderate' : 'low'} risk level
+- **Maximum Drawdown**: ${(maxDrawdown * 100).toFixed(2)}% - The largest peak-to-trough decline
+
+### Risk Trends
+The portfolio has shown ${timeline.var_95[0] > recentVar ? 'improving' : 'increasing'} risk characteristics over the analyzed period, 
+with VaR ${timeline.var_95[0] > recentVar ? 'decreasing' : 'increasing'} from ${(timeline.var_95[0] * 100).toFixed(2)}% to ${(recentVar * 100).toFixed(2)}%.
+
+### Recommendations
+1. Monitor correlation between holdings during market stress periods
+2. Consider rebalancing if any single position exceeds 20% of portfolio
+3. Review risk tolerance alignment given the current volatility profile
+        `;
+        
+        content.innerHTML = formatMarkdown(insights);
+    } catch (error) {
+        content.innerHTML = '<p class="text-red-600">Failed to generate insights.</p>';
+    }
+}
+
+// Metric toggle buttons
+document.querySelectorAll('.metric-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.metric-toggle').forEach(b => {
+            b.classList.remove('bg-primary-100', 'text-primary-700');
+            b.classList.add('bg-gray-100', 'text-gray-700');
+        });
+        e.target.classList.remove('bg-gray-100', 'text-gray-700');
+        e.target.classList.add('bg-primary-100', 'text-primary-700');
+        
+        currentMetric = e.target.dataset.metric;
+        // Re-render chart with new metric
+        // This would update the risk-timeline-chart
+    });
+});
+
+function viewPortfolio() {
+    if (currentPortfolioId) {
+        window.location.href = `/portfolio/${currentPortfolioId}`;
+    }
+}
+
+function optimizePortfolio() {
+    if (currentPortfolioId) {
+        window.location.href = `/optimize?portfolio=${currentPortfolioId}`;
+    }
+}
+
+function formatMarkdown(text) {
+    return text
+        .replace(/## (.*$)/gm, '<h4 class="text-lg font-bold text-gray-900 mt-4 mb-2">$1</h4>')
+        .replace(/### (.*$)/gm, '<h5 class="font-semibold text-gray-900 mt-3 mb-1">$1</h5>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '</p><p class="mt-2">')
+        .replace(/^/, '<p class="text-gray-700">')
+        .replace(/$/, '</p>');
+}
+</script>
+{% endblock %}

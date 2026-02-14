@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Portfolio Optimizer{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p class="text-gray-600">Manage users and system settings</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-blue-100 rounded-lg p-3 mr-4">
+                    <i class="fas fa-users text-2xl text-blue-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Total Users</p>
+                    <p class="text-2xl font-bold">{{ stats.total_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-yellow-100 rounded-lg p-3 mr-4">
+                    <i class="fas fa-clock text-2xl text-yellow-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Pending</p>
+                    <p class="text-2xl font-bold">{{ stats.pending_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-green-100 rounded-lg p-3 mr-4">
+                    <i class="fas fa-check-circle text-2xl text-green-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Active</p>
+                    <p class="text-2xl font-bold">{{ stats.active_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-red-100 rounded-lg p-3 mr-4">
+                    <i class="fas fa-ban text-2xl text-red-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Suspended</p>
+                    <p class="text-2xl font-bold">{{ stats.suspended_users }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Users -->
+    {% if pending_users %}
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">
+            <i class="fas fa-user-clock text-yellow-600 mr-2"></i>Pending Registration Requests
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Name</th>
+                        <th class="px-4 py-3 text-left">Email</th>
+                        <th class="px-4 py-3 text-left">Registered</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in pending_users %}
+                    <tr class="border-b">
+                        <td class="px-4 py-3">{{ user.first_name }} {{ user.last_name }}</td>
+                        <td class="px-4 py-3">{{ user.email }}</td>
+                        <td class="px-4 py-3">{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="approveUser({{ user.id }})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 mr-2">
+                                Approve
+                            </button>
+                            <button onclick="rejectUser({{ user.id }})" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                Reject
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- All Users -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">
+            <i class="fas fa-users text-primary-600 mr-2"></i>All Users
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Name</th>
+                        <th class="px-4 py-3 text-left">Email</th>
+                        <th class="px-4 py-3 text-left">Role</th>
+                        <th class="px-4 py-3 text-left">Status</th>
+                        <th class="px-4 py-3 text-left">Registered</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in all_users %}
+                    <tr class="border-b">
+                        <td class="px-4 py-3">{{ user.first_name }} {{ user.last_name }}</td>
+                        <td class="px-4 py-3">{{ user.email }}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded text-xs {% if user.role == 'admin' %}bg-purple-100 text-purple-700{% else %}bg-gray-100 text-gray-700{% endif %}">
+                                {{ user.role }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded text-xs {% if user.status == 'active' %}bg-green-100 text-green-700{% elif user.status == 'pending' %}bg-yellow-100 text-yellow-700{% else %}bg-red-100 text-red-700{% endif %}">
+                                {{ user.status }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td class="px-4 py-3 text-right">
+                            {% if user.status == 'active' %}
+                            <button onclick="suspendUser({{ user.id }})" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                Suspend
+                            </button>
+                            {% elif user.status == 'suspended' %}
+                            <button onclick="activateUser({{ user.id }})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                                Activate
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function approveUser(userId) {
+    if (!confirm('Approve this user?')) return;
+    
+    try {
+        const response = await fetch('/api/auth/admin/approve/' + userId, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('User approved!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Failed to approve user', 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function rejectUser(userId) {
+    const reason = prompt('Reason for rejection (optional):');
+    
+    try {
+        const response = await fetch('/api/auth/admin/reject/' + userId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: reason || 'Rejected by admin' })
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('User rejected!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Failed to reject user', 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function suspendUser(userId) {
+    if (!confirm('Suspend this user?')) return;
+    
+    try {
+        const response = await fetch('/api/auth/admin/suspend/' + userId, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('User suspended!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Failed to suspend user', 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function activateUser(userId) {
+    if (!confirm('Activate this user?')) return;
+    
+    try {
+        const response = await fetch('/api/auth/admin/activate/' + userId, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('User activated!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Failed to activate user', 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+</script>
+{% endblock %}
