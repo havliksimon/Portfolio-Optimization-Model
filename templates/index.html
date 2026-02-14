@@ -521,6 +521,30 @@
         <div id="chart-correlation" class="h-96"></div>
     </div>
 
+    <!-- Monte Carlo Chart -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-dice text-primary-600 mr-2"></i>Monte Carlo Simulation - 5,000 Paths
+        </h3>
+        <div id="chart-monte-carlo" class="h-96"></div>
+    </div>
+
+    <!-- Rolling Statistics Chart -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-wave-square text-primary-600 mr-2"></i>Rolling Statistics (63-day) with 95% Confidence Bands
+        </h3>
+        <div id="chart-rolling-stats" class="h-96"></div>
+    </div>
+
+    <!-- PCA Chart -->
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-project-diagram text-primary-600 mr-2"></i>Principal Component Analysis
+        </h3>
+        <div id="chart-pca" class="h-96"></div>
+    </div>
+
     {% endif %}
 
     <!-- Holdings with Real Data -->
@@ -962,18 +986,9 @@
 
 {% block extra_js %}
 <script>
-const EXAMPLE_PORTFOLIO = [
-    { ticker: 'BRK.B', name: 'Berkshire Hathaway', sector: 'Financials', weight: 0.30, sectorColor: '#3b82f6' },
-    { ticker: 'AAPL', name: 'Apple Inc', sector: 'Technology', weight: 0.15, sectorColor: '#8b5cf6' },
-    { ticker: 'MSFT', name: 'Microsoft', sector: 'Technology', weight: 0.15, sectorColor: '#8b5cf6' },
-    { ticker: 'GOOGL', name: 'Alphabet', sector: 'Technology', weight: 0.15, sectorColor: '#8b5cf6' },
-    { ticker: 'AMZN', name: 'Amazon', sector: 'Consumer', weight: 0.15, sectorColor: '#f59e0b' },
-    { ticker: 'LLY', name: 'Eli Lilly', sector: 'Healthcare', weight: 0.07, sectorColor: '#10b981' },
-    { ticker: 'KO', name: 'Coca-Cola', sector: 'Staples', weight: 0.03, sectorColor: '#ef4444' }
-];
+console.log('Page loaded, setting up...');
 
-let currentHoldings = [];
-
+// Make sure loadExamplePortfolio is defined before the button
 function loadExamplePortfolio() {
     console.log('Loading example portfolio...');
     currentHoldings = [
@@ -1055,6 +1070,290 @@ function updateTotalAllocation() {
     el.textContent = `Total: ${(total * 100).toFixed(1)}%`;
     el.className = 'text-sm font-semibold ' + (Math.abs(total - 1.0) < 0.01 ? 'text-green-600' : total > 1.0 ? 'text-red-600' : 'text-yellow-600');
 }
+
+// Render all charts for example portfolio
+function renderExampleCharts() {
+    {% if example_data and example_data.charts %}
+    const charts = {{ example_data.charts | tojson | safe }};
+    
+    // 1. Performance vs Benchmarks
+    if (charts.performance) {
+        const traces = [];
+        if (charts.performance.portfolio && charts.performance.portfolio.dates) {
+            traces.push({
+                x: charts.performance.portfolio.dates,
+                y: charts.performance.portfolio.values,
+                name: 'Portfolio',
+                type: 'scatter',
+                line: { color: '#3b82f6', width: 2 }
+            });
+        }
+        if (charts.performance.benchmarks) {
+            const colors = ['#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+            Object.keys(charts.performance.benchmarks).forEach((bm, i) => {
+                if (charts.performance.benchmarks[bm] && charts.performance.benchmarks[bm].dates) {
+                    traces.push({
+                        x: charts.performance.benchmarks[bm].dates,
+                        y: charts.performance.benchmarks[bm].values,
+                        name: bm,
+                        type: 'scatter',
+                        line: { color: colors[i % colors.length], width: 1.5 }
+                    });
+                }
+            });
+        }
+        if (traces.length > 0) {
+            Plotly.newPlot('chart-performance', traces, {
+                margin: { t: 20, r: 20, b: 40, l: 60 },
+                yaxis: { title: 'Cumulative Return', tickformat: '.0%' },
+                legend: { x: 0, y: 1 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            }, {displayModeBar: false});
+        }
+    }
+    
+    // 2. Allocation Pie Chart
+    if (charts.allocation && charts.allocation.pie) {
+        const trace = {
+            values: charts.allocation.pie.values,
+            labels: charts.allocation.pie.labels,
+            type: 'pie',
+            textinfo: 'label+percent',
+            hole: 0.4
+        };
+        Plotly.newPlot('chart-allocation', [trace], {paper_bgcolor: 'rgba(0,0,0,0)'}, {displayModeBar: false});
+    }
+    
+    // 3. Risk Contribution
+    if (charts.risk_contribution) {
+        const rc = charts.risk_contribution;
+        const trace = {
+            x: rc.risk_contrib_pct,
+            y: rc.tickers,
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: '#3b82f6' }
+        };
+        Plotly.newPlot('chart-risk-contribution', [trace], {
+            margin: { t: 20, r: 20, b: 40, l: 60 },
+            xaxis: { title: 'Risk Contribution (%)' },
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, {displayModeBar: false});
+    }
+    
+    // 4. Efficient Frontier
+    if (charts.efficient_frontier) {
+        const ef = charts.efficient_frontier;
+        const traces = [];
+        if (ef.frontier && ef.frontier.length > 0) {
+            traces.push({
+                x: ef.frontier.map(p => p.volatility * 100),
+                y: ef.frontier.map(p => p.return_annualized * 100),
+                mode: 'lines',
+                name: 'Efficient Frontier',
+                line: { color: '#3b82f6', width: 2 }
+            });
+        }
+        if (ef.individual_assets) {
+            traces.push({
+                x: ef.individual_assets.map(p => p.volatility * 100),
+                y: ef.individual_assets.map(p => p.return_annualized * 100),
+                mode: 'markers',
+                name: 'Individual Assets',
+                marker: { size: 10, color: '#6b7280' }
+            });
+        }
+        if (traces.length > 0) {
+            Plotly.newPlot('chart-efficient-frontier', traces, {
+                margin: { t: 20, r: 20, b: 40, l: 60 },
+                xaxis: { title: 'Volatility (%)' },
+                yaxis: { title: 'Expected Return (%)' },
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, {displayModeBar: false});
+        }
+    }
+    
+    // 5. Return Distribution
+    if (charts.return_distribution && charts.return_distribution.histogram) {
+        const rd = charts.return_distribution;
+        const trace = {
+            x: rd.histogram.values,
+            y: rd.histogram.counts,
+            type: 'bar',
+            marker: { color: '#3b82f6' }
+        };
+        Plotly.newPlot('chart-distribution', [trace], {
+            margin: { t: 20, r: 20, b: 40, l: 60 },
+            xaxis: { title: 'Daily Return' },
+            yaxis: { title: 'Frequency' },
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, {displayModeBar: false});
+    }
+    
+    // 6. Monthly Returns Heatmap
+    if (charts.monthly_returns) {
+        const mr = charts.monthly_returns;
+        const trace = {
+            z: mr.data,
+            x: mr.months,
+            y: mr.years,
+            type: 'heatmap',
+            colorscale: 'RdYlGn',
+            zmid: 0
+        };
+        Plotly.newPlot('chart-monthly-returns', [trace], {
+            margin: { t: 20, r: 20, b: 60, l: 60 },
+            paper_bgcolor: 'rgba(0,0,0,0)'
+        }, {displayModeBar: false});
+    }
+    
+    // 7. Correlation Heatmap
+    if (charts.rolling_correlation && charts.rolling_correlation.tickers) {
+        const rc = charts.rolling_correlation;
+        const n = rc.tickers.length;
+        const corrMatrix = [];
+        for (let i = 0; i < n; i++) {
+            const row = [];
+            for (let j = 0; j < n; j++) {
+                row.push(i === j ? 1 : 0.5);
+            }
+            corrMatrix.push(row);
+        }
+        const trace = {
+            z: corrMatrix,
+            x: rc.tickers,
+            y: rc.tickers,
+            type: 'heatmap',
+            colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']],
+            zmid: 0, zmin: -1, zmax: 1
+        };
+        Plotly.newPlot('chart-correlation', [trace], {margin: { t: 20, r: 20, b: 60, l: 80 }}, {displayModeBar: false});
+    }
+    
+    // 8. Monte Carlo Paths (sample)
+    const mcContainer = document.getElementById('chart-monte-carlo');
+    if (mcContainer && charts.monte_carlo) {
+        const paths = charts.monte_carlo.paths;
+        if (paths && paths.length > 0) {
+            // Sample 50 paths
+            const step = Math.max(1, Math.floor(paths.length / 50));
+            const samplePaths = paths.filter((_, i) => i % step === 0).slice(0, 50);
+            const traces = samplePaths.slice(0, 20).map(p => ({
+                x: p.map((_, i) => i),
+                y: p,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#3b82f6', width: 0.5 },
+                opacity: 0.3,
+                showlegend: false
+            }));
+            // Add median
+            const medianPath = paths.map(p => {
+                const sorted = p.slice().sort((a, b) => a - b);
+                return sorted[Math.floor(sorted.length / 2)];
+            });
+            traces.push({
+                x: medianPath.map((_, i) => i),
+                y: medianPath,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Median',
+                line: { color: '#ef4444', width: 2 }
+            });
+            Plotly.newPlot('chart-monte-carlo', traces, {
+                margin: { t: 20, r: 20, b: 40, l: 60 },
+                xaxis: { title: 'Trading Days' },
+                yaxis: { title: 'Portfolio Value ($)' },
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, {displayModeBar: false});
+        }
+    }
+    
+    // 9. Rolling Statistics
+    const rollingContainer = document.getElementById('chart-rolling-stats');
+    if (rollingContainer && charts.rolling_metrics) {
+        const rm = charts.rolling_metrics;
+        if (rm['63d'] && rm['63d'].dates) {
+            const traces = [];
+            // Mean with confidence band
+            traces.push({
+                x: rm['63d'].dates,
+                y: rm['63d'].mean,
+                type: 'scatter',
+                mode: 'lines',
+                name: '63-day Mean',
+                line: { color: '#3b82f6', width: 2 }
+            });
+            // Upper CI
+            if (rm['63d'].mean_upper) {
+                traces.push({
+                    x: rm['63d'].dates,
+                    y: rm['63d'].mean_upper,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: '95% CI Upper',
+                    line: { color: '#10b981', width: 1 },
+                    opacity: 0.5
+                });
+                traces.push({
+                    x: rm['63d'].dates,
+                    y: rm['63d'].mean_lower,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: '95% CI Lower',
+                    line: { color: '#10b981', width: 1 },
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(16, 185, 129, 0.1)',
+                    opacity: 0.5
+                });
+            }
+            Plotly.newPlot('chart-rolling-stats', traces, {
+                margin: { t: 20, r: 20, b: 40, l: 60 },
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Rolling Return' },
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, {displayModeBar: false});
+        }
+    }
+    
+    // 10. PCA Biplot
+    const pcaContainer = document.getElementById('chart-pca');
+    if (pcaContainer && charts.pca_biplot) {
+        const pca = charts.pca_biplot;
+        if (pca.scores && pca.scores.length > 0) {
+            const trace = {
+                x: pca.scores.map(s => s[0]),
+                y: pca.scores.map(s => s[1]),
+                mode: 'markers',
+                type: 'scatter',
+                marker: { size: 8, color: '#3b82f6' }
+            };
+            // Add loadings as arrows
+            const layout = {
+                margin: { t: 20, r: 20, b: 40, l: 60 },
+                xaxis: { title: 'PC1' },
+                yaxis: { title: 'PC2' },
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            };
+            if (pca.loadings) {
+                layout.shapes = pca.loadings.map((l, i) => ({
+                    type: 'line',
+                    x0: 0, y0: 0,
+                    x1: l[0] * 3, y1: l[1] * 3,
+                    line: { color: '#ef4444', width: 2 }
+                }));
+            }
+            Plotly.newPlot('chart-pca', [trace], layout, {displayModeBar: false});
+        }
+    }
+    {% endif %}
+}
+
+// Auto-render charts on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(renderExampleCharts, 500);
+});
 
 document.getElementById('add-holding').addEventListener('click', () => {
     currentHoldings.push({ ticker: '', name: '', sector: 'Technology', weight: 0 });
