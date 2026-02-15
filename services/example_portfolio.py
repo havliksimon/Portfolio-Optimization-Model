@@ -363,14 +363,14 @@ class ExamplePortfolioService:
         logger.info("Fitting distributions...")
         dist_results = advanced_statistics.fit_distributions(portfolio_returns)
         
-        # 4. Monte Carlo Simulation
+        # 4. Monte Carlo Simulation (reduced for memory efficiency on low-RAM deployments)
         logger.info("Running Monte Carlo...")
         mc_results = advanced_statistics.monte_carlo_simulation(
             portfolio_returns, 
             weights_array,
             initial_value=100000,
-            n_simulations=5000,
-            n_days=252
+            n_simulations=500,  # Reduced from 5000 for memory efficiency
+            n_days=126  # Reduced from 252 (6 months instead of 1 year)
         )
         
         # 5. Statistical Tests

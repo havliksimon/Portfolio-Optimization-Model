@@ -220,24 +220,28 @@ def portfolio_detail(portfolio_id):
 
 
 @app.route('/optimize')
+@login_required
 def optimize_view():
     """Portfolio optimization interface."""
     return render_template('optimize.html')
 
 
 @app.route('/analysis')
+@login_required
 def analysis_view():
     """AI analysis view."""
     return render_template('analysis.html')
 
 
 @app.route('/analysis-comprehensive')
+@login_required
 def analysis_comprehensive_view():
     """Comprehensive risk analytics view."""
     return render_template('analysis_comprehensive.html')
 
 
 @app.route('/upload')
+@login_required
 def upload_view():
     """Document upload interface."""
     return render_template('upload.html')
@@ -387,6 +391,7 @@ def admin_cache_clear():
 # =============================================================================
 
 @app.route('/api/upload', methods=['POST'])
+@login_required
 def upload_document():
     """
     Upload and parse portfolio document (PDF, CSV, Excel).
@@ -596,6 +601,7 @@ def calculate_portfolio_risk_metrics(tickers: List[str], as_of_date: date) -> Di
 # =============================================================================
 
 @app.route('/api/portfolios/<int:portfolio_id>/history', methods=['GET'])
+@login_required
 def get_portfolio_history(portfolio_id):
     """
     Get portfolio risk metrics history over time.
@@ -761,6 +767,7 @@ def generate_historical_timeline(portfolio_id: int) -> List[PortfolioHistory]:
 # =============================================================================
 
 @app.route('/api/portfolio/analyze', methods=['POST'])
+@login_required
 def analyze_current_portfolio():
     """
     Analyze current portfolio composition and suggest optimizations.
@@ -934,6 +941,7 @@ def suggest_rebalancing(holdings, returns_df, risk_profile):
 # =============================================================================
 
 @app.route('/api/portfolio/comprehensive-analysis', methods=['POST'])
+@login_required
 def comprehensive_portfolio_analysis():
     """
     Comprehensive portfolio analysis with full risk metrics and benchmarks.
@@ -1605,6 +1613,7 @@ def get_portfolio_documents(portfolio_id):
 # =============================================================================
 
 @app.route('/api/optimize', methods=['POST'])
+@login_required
 def optimize_portfolio():
     """
     Execute portfolio optimization.
@@ -1726,6 +1735,7 @@ def calculate_efficient_frontier():
 # =============================================================================
 
 @app.route('/api/analysis/portfolio', methods=['POST'])
+@login_required
 def analyze_portfolio():
     """
     Generate AI-powered portfolio analysis.
@@ -1807,6 +1817,7 @@ def analyze_risk():
 # =============================================================================
 
 @app.route('/api/advanced/risk', methods=['POST'])
+@login_required
 def advanced_risk_analysis():
     """
     Calculate advanced risk metrics.
@@ -1865,6 +1876,7 @@ def advanced_risk_analysis():
 
 
 @app.route('/api/hierarchical-risk-parity', methods=['POST'])
+@login_required
 def hierarchical_risk_parity():
     """
     Calculate Hierarchical Risk Parity portfolio.
@@ -1955,6 +1967,7 @@ def black_litterman_optimization():
 
 
 @app.route('/api/regime-detection', methods=['POST'])
+@login_required
 def regime_detection():
     """
     Detect market regimes using Hidden Markov Model.
