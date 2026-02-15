@@ -16,5 +16,5 @@ ENV PORT=5000
 # Expose port
 EXPOSE 5000
 
-# Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "app:app"]
+# Run with gunicorn on port 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--timeout", "120", "app:app"]
