@@ -79,7 +79,8 @@ class FamaFrenchModel:
         """
         # Use synthetic factors for now (reliable and fast)
         # In production, you might want to fetch actual Fama-French data
-        return self._create_synthetic_factors()
+        self.factor_data = self._create_synthetic_factors()
+        return self.factor_data
     
     def _create_synthetic_factors(self) -> pd.DataFrame:
         """Create synthetic factor data as fallback."""
