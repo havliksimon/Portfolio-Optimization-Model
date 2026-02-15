@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 import secrets
 from flask import Blueprint, request, jsonify, session, current_app
+from flask_login import login_user, logout_user
 from sqlalchemy import or_
 from models.database import db
 from models.auth import User, PasswordResetToken, SavedScenario, UserActivity, GuestSession
@@ -29,9 +30,9 @@ def login_required(f):
         if 'user_id' not in session:
             return jsonify({'error': 'Authentication required'}), 401
         
-        # Check if user is still active
+        # Check if user is still active (is_active is now a property, not a method)
         user = User.query.get(session['user_id'])
-        if not user or not user.is_active():
+        if not user or not user.is_active:
             session.clear()
             return jsonify({'error': 'Account inactive or locked'}), 403
         
@@ -47,7 +48,7 @@ def admin_required(f):
             return jsonify({'error': 'Authentication required'}), 401
         
         user = User.query.get(session['user_id'])
-        if not user or not user.is_admin():
+        if not user or not user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
         
         return f(*args, **kwargs)
@@ -174,10 +175,15 @@ def login():
     user.record_login(request.remote_addr)
     db.session.commit()
     
+    # Log in the user with Flask-Login (this sets current_user)
+    login_user(user, remember=True)
+    
     session['user_id'] = user.id
     session['user_email'] = user.email
     session['user_role'] = user.role
     session.permanent = True
+    
+    logger.info(f"User logged in: {user.email}")
     
     return jsonify({
         'success': True,
@@ -196,20 +202,30 @@ def login():
 @login_required
 def logout():
     """Log out user."""
+    logout_user()  # Flask-Login logout
     session.clear()
     return jsonify({'success': True, 'message': 'Logged out'})
 
 
 @auth_bp.route('/me', methods=['GET'])
-@login_required
 def get_current_user():
     """Get current user."""
-    user = User.query.get(session['user_id'])
-    if not user:
-        session.clear()
-        return jsonify({'error': 'User not found'}), 404
+    from flask_login import current_user
     
-    return jsonify({'success': True, 'user': user.to_dict()})
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    return jsonify({
+        'success': True, 
+        'user': {
+            'id': current_user.id,
+            'email': current_user.email,
+            'first_name': current_user.first_name,
+            'last_name': current_user.last_name,
+            'role': current_user.role,
+            'status': current_user.status
+        }
+    })
 
 
 @auth_bp.route('/forgot-password', methods=['POST'])

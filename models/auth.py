@@ -82,6 +82,13 @@ class User(db.Model):
         """Verify password against hash."""
         return check_password_hash(self.password_hash, password)
     
+    # Flask-Login required methods/properties
+    @property
+    def is_authenticated(self) -> bool:
+        """Return True if user is authenticated."""
+        return True
+    
+    @property
     def is_active(self) -> bool:
         """Check if user account is active and not locked."""
         if self.status != 'active':
@@ -90,6 +97,16 @@ class User(db.Model):
             return False
         return True
     
+    @property
+    def is_anonymous(self) -> bool:
+        """Return False for registered users."""
+        return False
+    
+    def get_id(self) -> str:
+        """Return user ID as string for Flask-Login."""
+        return str(self.id)
+    
+    @property
     def is_admin(self) -> bool:
         """Check if user has admin role."""
         return self.role == 'admin'

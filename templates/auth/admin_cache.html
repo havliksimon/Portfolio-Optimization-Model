@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Cache Management - Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold text-slate-900">
+            <i class="fas fa-database text-primary-600 mr-2"></i>Cache Management
+        </h1>
+        <a href="/admin" class="text-slate-600 hover:text-slate-900">
+            <i class="fas fa-arrow-left mr-1"></i> Back to Admin
+        </a>
+    </div>
+
+    <!-- Cache Status Card -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6 border border-slate-200">
+        <h2 class="text-xl font-semibold text-slate-900 mb-4">Cache Status</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="p-4 bg-slate-50 rounded-lg">
+                <p class="text-sm text-slate-600 mb-1">Cache Status</p>
+                <p class="text-lg font-semibold {% if cache_info.has_data %}text-emerald-600{% else %}text-red-600{% endif %}">
+                    {% if cache_info.has_data %}
+                        <i class="fas fa-check-circle mr-1"></i> Active
+                    {% else %}
+                        <i class="fas fa-times-circle mr-1"></i> Empty
+                    {% endif %}
+                </p>
+            </div>
+            
+            <div class="p-4 bg-slate-50 rounded-lg">
+                <p class="text-sm text-slate-600 mb-1">Disk Cache</p>
+                <p class="text-lg font-semibold {% if cache_info.disk_cache_exists %}text-emerald-600{% else %}text-amber-600{% endif %}">
+                    {% if cache_info.disk_cache_exists %}
+                        <i class="fas fa-hdd mr-1"></i> Exists
+                    {% else %}
+                        <i class="fas fa-exclamation-triangle mr-1"></i> Not Found
+                    {% endif %}
+                </p>
+            </div>
+            
+            {% if cache_info.last_computed %}
+            <div class="p-4 bg-slate-50 rounded-lg">
+                <p class="text-sm text-slate-600 mb-1">Last Computed</p>
+                <p class="text-lg font-semibold text-slate-900">
+                    {{ cache_info.last_computed[:19] }}
+                </p>
+            </div>
+            
+            <div class="p-4 bg-slate-50 rounded-lg">
+                <p class="text-sm text-slate-600 mb-1">Cache Age</p>
+                <p class="text-lg font-semibold {% if cache_info.cache_age_hours > 20 %}text-amber-600{% else %}text-emerald-600{% endif %}">
+                    {{ "%.1f"|format(cache_info.cache_age_hours) }} hours
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="text-sm text-slate-500">
+            <p><strong>Cache File:</strong> <code class="bg-slate-100 px-2 py-1 rounded">{{ cache_info.cache_file_path }}</code></p>
+        </div>
+    </div>
+
+    <!-- Actions Card -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6 border border-slate-200">
+        <h2 class="text-xl font-semibold text-slate-900 mb-4">Actions</h2>
+        
+        <div class="space-y-4">
+            <div class="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div>
+                    <h3 class="font-semibold text-blue-900">Refresh Cache</h3>
+                    <p class="text-sm text-blue-700">Recompute all analysis with fresh market data. Takes ~10-15 seconds.</p>
+                </div>
+                <button onclick="refreshCache()" id="refresh-btn" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh Now</span>
+                </button>
+            </div>
+            
+            <div class="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                <div>
+                    <h3 class="font-semibold text-red-900">Clear Cache</h3>
+                    <p class="text-sm text-red-700">Remove all cached data. Will force recomputation on next page load.</p>
+                </div>
+                <button onclick="clearCache()" id="clear-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2">
+                    <i class="fas fa-trash-alt"></i>
+                    <span>Clear Cache</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Status Message -->
+        <div id="status-message" class="mt-4 hidden"></div>
+    </div>
+
+    <!-- Info Card -->
+    <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
+        <h3 class="font-semibold text-slate-900 mb-2">
+            <i class="fas fa-info-circle text-primary-600 mr-2"></i>How Caching Works
+        </h3>
+        <ul class="text-sm text-slate-600 space-y-2">
+            <li><i class="fas fa-check text-emerald-600 mr-2"></i><strong>Server Startup:</strong> Analysis is computed once and saved to disk</li>
+            <li><i class="fas fa-check text-emerald-600 mr-2"></i><strong>Page Loads:</strong> Data is served instantly from memory (no delay)</li>
+            <li><i class="fas fa-check text-emerald-600 mr-2"></i><strong>Auto-Expiry:</strong> Cache older than 24 hours is automatically refreshed</li>
+            <li><i class="fas fa-check text-emerald-600 mr-2"></i><strong>Manual Refresh:</strong> Use "Refresh Now" to get latest market data anytime</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+async function refreshCache() {
+    const btn = document.getElementById('refresh-btn');
+    const statusDiv = document.getElementById('status-message');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Refreshing...</span>';
+    statusDiv.className = 'mt-4 p-4 bg-blue-50 text-blue-700 rounded-lg';
+    statusDiv.textContent = 'Computing analysis... this may take 10-15 seconds';
+    statusDiv.classList.remove('hidden');
+    
+    try {
+        const response = await fetch('/api/admin/cache/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            statusDiv.className = 'mt-4 p-4 bg-emerald-50 text-emerald-700 rounded-lg';
+            statusDiv.innerHTML = `<i class="fas fa-check-circle mr-2"></i>Cache refreshed successfully! Computed at: ${data.computed_at}`;
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    } catch (error) {
+        statusDiv.className = 'mt-4 p-4 bg-red-50 text-red-700 rounded-lg';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>Error: ${error.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh Now</span>';
+    }
+}
+
+async function clearCache() {
+    if (!confirm('Are you sure you want to clear the cache? This will force recomputation on the next page load.')) {
+        return;
+    }
+    
+    const btn = document.getElementById('clear-btn');
+    const statusDiv = document.getElementById('status-message');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Clearing...</span>';
+    
+    try {
+        const response = await fetch('/api/admin/cache/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            statusDiv.className = 'mt-4 p-4 bg-emerald-50 text-emerald-700 rounded-lg';
+            statusDiv.innerHTML = `<i class="fas fa-check-circle mr-2"></i>${data.message}`;
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    } catch (error) {
+        statusDiv.className = 'mt-4 p-4 bg-red-50 text-red-700 rounded-lg';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>Error: ${error.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt"></i><span>Clear Cache</span>';
+    }
+}
+</script>
+{% endblock %}

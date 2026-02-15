@@ -390,8 +390,11 @@ class AdvancedStatistics:
         else:
             sw_stat, sw_pval = 0, 1
         
-        # Anderson-Darling test
-        ad_result = stats.anderson(returns_clean, dist='norm')
+        # Anderson-Darling test (suppress FutureWarning for now)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            ad_result = stats.anderson(returns_clean, dist='norm')
         ad_stat = ad_result.statistic
         ad_critical = ad_result.critical_values[2]  # 5% level
         

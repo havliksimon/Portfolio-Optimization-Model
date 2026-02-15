@@ -173,6 +173,21 @@ class MarketDataService:
             logger.error(f"Error fetching data for {ticker}: {e}")
             return None
     
+    def _normalize_ticker(self, ticker: str) -> str:
+        """
+        Normalize ticker symbol for Yahoo Finance.
+        
+        Handles special cases like:
+        - BRK.B -> BRK-B
+        - BF.A -> BF-A
+        """
+        # Convert to uppercase and strip whitespace
+        ticker = ticker.upper().strip()
+        # Replace dots with dashes for class shares
+        if '.' in ticker:
+            ticker = ticker.replace('.', '-')
+        return ticker
+    
     def fetch_batch_data(
         self,
         tickers: List[str],
@@ -194,11 +209,13 @@ class MarketDataService:
             Dictionary mapping ticker to PriceData (or None on failure)
         """
         results = {}
+        # Normalize tickers
+        normalized_tickers = [self._normalize_ticker(t) for t in tickers]
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_ticker = {
                 executor.submit(self.fetch_historical_data, t, period): t 
-                for t in tickers
+                for t in normalized_tickers
             }
             
             for future in as_completed(future_to_ticker):
@@ -402,34 +419,49 @@ class MarketDataService:
         if not has_app_context():
             return
         
+        from sqlalchemy.exc import IntegrityError
+        
         try:
-            # Use no_autoflush to prevent premature flushing
-            with db.session.no_autoflush:
-                # Get or create asset
-                asset = Asset.query.filter_by(ticker=ticker).first()
-                if not asset:
-                    asset = Asset(ticker=ticker)
-                    db.session.add(asset)
-                    db.session.flush()
-                
-                # Insert market data
-                for date, row in data.iterrows():
-                    market_data = MarketData(
-                        asset_id=asset.id,
-                        date=date.date() if isinstance(date, pd.Timestamp) else date,
-                        open_price=float(row.get('Open')) if pd.notna(row.get('Open')) else None,
-                        high_price=float(row.get('High')) if pd.notna(row.get('High')) else None,
-                        low_price=float(row.get('Low')) if pd.notna(row.get('Low')) else None,
-                        close_price=float(row.get('Close')) if pd.notna(row.get('Close')) else None,
-                        adjusted_close=float(row.get('Adj Close')) if pd.notna(row.get('Adj Close')) else float(row.get('Close')) if pd.notna(row.get('Close')) else None,
-                        volume=float(row.get('Volume')) if pd.notna(row.get('Volume')) else None
-                    )
-                    db.session.merge(market_data)
-                
-                db.session.commit()
+            # Get or create asset
+            asset = Asset.query.filter_by(ticker=ticker).first()
+            if not asset:
+                asset = Asset(ticker=ticker)
+                db.session.add(asset)
+                db.session.flush()
             
+            # Get existing dates to avoid duplicates
+            existing_dates = {
+                md.date for md in 
+                MarketData.query.filter_by(asset_id=asset.id).all()
+            }
+            
+            # Insert only new market data
+            for date, row in data.iterrows():
+                date_val = date.date() if isinstance(date, pd.Timestamp) else date
+                
+                # Skip if already exists
+                if date_val in existing_dates:
+                    continue
+                
+                market_data = MarketData(
+                    asset_id=asset.id,
+                    date=date_val,
+                    open_price=float(row.get('Open')) if pd.notna(row.get('Open')) else None,
+                    high_price=float(row.get('High')) if pd.notna(row.get('High')) else None,
+                    low_price=float(row.get('Low')) if pd.notna(row.get('Low')) else None,
+                    close_price=float(row.get('Close')) if pd.notna(row.get('Close')) else None,
+                    adjusted_close=float(row.get('Adj Close')) if pd.notna(row.get('Adj Close')) else float(row.get('Close')) if pd.notna(row.get('Close')) else None,
+                    volume=float(row.get('Volume')) if pd.notna(row.get('Volume')) else None
+                )
+                db.session.add(market_data)
+            
+            db.session.commit()
+            
+        except IntegrityError:
+            # Duplicate entry - rollback and continue
+            db.session.rollback()
         except Exception as e:
-            logger.error(f"Cache storage error: {e}")
+            logger.warning(f"Cache storage warning for {ticker}: {e}")
             db.session.rollback()
 
 

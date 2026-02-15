@@ -1,9 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Portfolio Optimizer{% endblock %}</title>
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,23 +22,29 @@
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     
+    <!-- KaTeX for Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
     <!-- Tailwind Config -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+                    },
                     colors: {
                         primary: {
                             50: '#eff6ff',
                             100: '#dbeafe',
+                            200: '#bfdbfe',
                             500: '#3b82f6',
                             600: '#2563eb',
                             700: '#1d4ed8',
                             900: '#1e3a8a',
-                        },
-                        dark: {
-                            800: '#1f2937',
-                            900: '#111827',
                         }
                     }
                 }
@@ -42,96 +53,222 @@
     </script>
     
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+        /* Base styles - LIGHT THEME */
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
         }
-        .card-shadow {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        
+        /* Selection color */
+        ::selection {
+            background: rgba(59, 130, 246, 0.2);
+            color: #1e293b;
         }
-        .metric-card {
-            transition: transform 0.2s, box-shadow 0.2s;
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-        .metric-card:hover {
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Card hover effect */
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .card-hover:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
         }
+        
+        /* Loading spinner */
         .loading-spinner {
-            border: 3px solid #f3f3f3;
+            border: 3px solid #e2e8f0;
             border-top: 3px solid #3b82f6;
             border-radius: 50%;
             width: 24px;
             height: 24px;
             animation: spin 1s linear infinite;
         }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* Fade in animation */
         .fade-in {
-            animation: fadeIn 0.5s ease-in;
+            animation: fadeIn 0.5s ease-out;
         }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Gradient text */
+        .text-gradient {
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Navigation active state */
+        .nav-link {
+            position: relative;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #3b82f6, #06b6d4);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after,
+        .nav-link.active::after {
+            width: 100%;
+        }
+
+        /* Smooth transitions */
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
         }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-slate-50 text-slate-800 min-h-screen antialiased">
     <!-- Navigation -->
-    <nav class="gradient-bg text-white shadow-lg">
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
+                <!-- Logo -->
                 <div class="flex items-center">
-                    <a href="/" class="flex items-center space-x-2">
-                        <i class="fas fa-chart-line text-2xl"></i>
-                        <span class="font-bold text-xl">Portfolio Optimizer</span>
+                    <a href="/" class="flex items-center space-x-3 group">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-cyan-500 flex items-center justify-center group-hover:shadow-lg transition-all duration-300">
+                            <i class="fas fa-chart-line text-white text-lg"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="font-bold text-lg tracking-tight text-slate-900">Portfolio<span class="text-gradient">Optimizer</span></span>
+                            <span class="text-[10px] text-slate-500 -mt-1 tracking-widest uppercase">Quantitative Analytics</span>
+                        </div>
                     </a>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="hover:bg-white/20 px-3 py-2 rounded-md transition">
-                        <i class="fas fa-home mr-1"></i> Dashboard
+                
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex items-center space-x-1">
+                    <a href="/" class="nav-link px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                        <i class="fas fa-home mr-2 text-primary-600"></i> Dashboard
                     </a>
-                    <a href="/upload" class="hover:bg-white/20 px-3 py-2 rounded-md transition">
-                        <i class="fas fa-cloud-upload-alt mr-1"></i> Upload
+                    <a href="/upload" class="nav-link px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                        <i class="fas fa-cloud-upload-alt mr-2 text-emerald-600"></i> Upload
                     </a>
-                    <a href="/analysis-comprehensive" class="hover:bg-white/20 px-3 py-2 rounded-md transition">
-                        <i class="fas fa-chart-area mr-1"></i> Risk Analytics
+                    <a href="/analysis-comprehensive" class="nav-link px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                        <i class="fas fa-chart-area mr-2 text-purple-600"></i> Analytics
                     </a>
-                    <a href="/optimize" class="hover:bg-white/20 px-3 py-2 rounded-md transition">
-                        <i class="fas fa-calculator mr-1"></i> Optimize
+                    <a href="/optimize" class="nav-link px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                        <i class="fas fa-calculator mr-2 text-cyan-600"></i> Optimize
                     </a>
+                    
                     {% if current_user.is_authenticated %}
-                        <div class="relative group">
-                            <button class="hover:bg-white/20 px-3 py-2 rounded-md transition flex items-center">
-                                <i class="fas fa-user mr-1"></i> {{ current_user.first_name or current_user.email }}
-                                <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                        <div class="relative group ml-4">
+                            <button class="flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center">
+                                    <i class="fas fa-user text-white text-sm"></i>
+                                </div>
+                                <span class="font-medium text-sm text-slate-700">{{ current_user.first_name or current_user.email.split('@')[0] }}</span>
+                                <i class="fas fa-chevron-down text-xs text-slate-400 group-hover:rotate-180 transition-transform"></i>
                             </button>
-                            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 hidden group-hover:block z-50">
-                                <a href="/profile" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                    <i class="fas fa-id-card mr-2"></i>Profile
-                                </a>
-                                {% if current_user.is_admin %}
-                                <a href="/admin" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                    <i class="fas fa-cog mr-2"></i>Admin Dashboard
-                                </a>
-                                {% endif %}
-                                <hr class="my-1">
-                                <a href="/auth/logout" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                                </a>
+                            
+                            <div class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl py-2 hidden group-hover:block z-50 border border-slate-200">
+                                <div class="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                                    <p class="text-xs text-slate-500 uppercase tracking-wider">Signed in as</p>
+                                    <p class="text-sm font-medium text-slate-900 truncate mt-0.5">{{ current_user.email }}</p>
+                                </div>
+                                <div class="py-2">
+                                    <a href="/profile" class="flex items-center px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-600 transition-colors">
+                                        <i class="fas fa-id-card w-5 mr-3 text-primary-600"></i>Profile
+                                    </a>
+                                    {% if current_user.is_admin %}
+                                    <a href="/admin" class="flex items-center px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-600 transition-colors">
+                                        <i class="fas fa-cog w-5 mr-3 text-amber-600"></i>Admin Dashboard
+                                    </a>
+                                    {% endif %}
+                                    <div class="border-t border-slate-100 my-2"></div>
+                                    <a href="/auth/logout" class="flex items-center px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                        <i class="fas fa-sign-out-alt w-5 mr-3"></i>Logout
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     {% else %}
-                        <a href="/auth/login" class="hover:bg-white/20 px-3 py-2 rounded-md transition">
-                            <i class="fas fa-sign-in-alt mr-1"></i> Login
-                        </a>
-                        <a href="/auth/register" class="bg-white text-primary-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-100 transition">
-                            <i class="fas fa-user-plus mr-1"></i> Register
-                        </a>
+                        <div class="flex items-center space-x-3 ml-4">
+                            <a href="/auth/login" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                                Sign In
+                            </a>
+                            <a href="/auth/register" class="px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 hover:shadow-lg hover:shadow-primary-500/25 transition-all">
+                                Get Started
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-btn" class="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Navigation -->
+        <div id="mobile-menu" class="md:hidden hidden border-t border-slate-200 bg-white">
+            <div class="px-4 py-3 space-y-2">
+                <a href="/" class="flex items-center px-4 py-3 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+                    <i class="fas fa-home w-6 mr-3 text-primary-600"></i> Dashboard
+                </a>
+                <a href="/upload" class="flex items-center px-4 py-3 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+                    <i class="fas fa-cloud-upload-alt w-6 mr-3 text-emerald-600"></i> Upload
+                </a>
+                <a href="/analysis-comprehensive" class="flex items-center px-4 py-3 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+                    <i class="fas fa-chart-area w-6 mr-3 text-purple-600"></i> Analytics
+                </a>
+                <a href="/optimize" class="flex items-center px-4 py-3 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+                    <i class="fas fa-calculator w-6 mr-3 text-cyan-600"></i> Optimize
+                </a>
+                {% if not current_user.is_authenticated %}
+                    <div class="border-t border-slate-200 pt-3 mt-3">
+                        <a href="/auth/login" class="flex items-center px-4 py-3 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors">
+                            <i class="fas fa-lock w-6 mr-3"></i> Sign In
+                        </a>
+                        <a href="/auth/register" class="flex items-center px-4 py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-700 transition-colors">
+                            <i class="fas fa-user-plus w-6 mr-3"></i> Get Started
+                        </a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -142,14 +279,16 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-dark-900 text-gray-400 py-8 mt-12">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <p class="text-sm">
-                Portfolio Optimizer - Modern Portfolio Theory & AI-Powered Analytics
-            </p>
-            <p class="text-xs mt-2">
-                Data provided by Yahoo Finance. For educational purposes only.
-            </p>
+    <footer class="border-t border-slate-200 bg-white mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="text-center">
+                <p class="text-sm text-slate-600">
+                    Portfolio Optimizer - Modern Portfolio Theory & AI-Powered Analytics
+                </p>
+                <p class="text-xs text-slate-400 mt-2">
+                    Data provided by Yahoo Finance. For educational purposes only.
+                </p>
+            </div>
         </div>
     </footer>
 
@@ -164,9 +303,9 @@
             const toast = document.createElement('div');
             
             const colors = {
-                success: 'bg-green-500',
+                success: 'bg-emerald-500',
                 error: 'bg-red-500',
-                warning: 'bg-yellow-500',
+                warning: 'bg-amber-500',
                 info: 'bg-blue-500'
             };
             
@@ -177,10 +316,10 @@
                 info: 'fa-info-circle'
             };
             
-            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 fade-in`;
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-xl shadow-lg flex items-center space-x-3 fade-in`;
             toast.innerHTML = `
                 <i class="fas ${icons[type]}"></i>
-                <span>${message}</span>
+                <span class="font-medium">${message}</span>
             `;
             
             container.appendChild(toast);
@@ -192,19 +331,17 @@
             }, 4000);
         }
 
-        // Format percentage
+        // Format utilities
         function formatPercent(value, decimals = 2) {
             if (value === null || value === undefined) return 'N/A';
             return (value * 100).toFixed(decimals) + '%';
         }
 
-        // Format currency
         function formatCurrency(value, decimals = 2) {
             if (value === null || value === undefined) return 'N/A';
-            return '$' + value.toFixed(decimals);
+            return '$' + value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
 
-        // Format number
         function formatNumber(value, decimals = 2) {
             if (value === null || value === undefined) return 'N/A';
             return value.toFixed(decimals);
@@ -215,7 +352,7 @@
             element.innerHTML = `
                 <div class="flex items-center justify-center py-8">
                     <div class="loading-spinner mr-3"></div>
-                    <span class="text-gray-600">Processing...</span>
+                    <span class="text-slate-500">Processing...</span>
                 </div>
             `;
         }
@@ -255,8 +392,39 @@
                 timeout = setTimeout(later, wait);
             };
         }
+
+        // Mobile menu toggle
+        document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+
+        // Initialize KaTeX math rendering
+        document.addEventListener("DOMContentLoaded", function() {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
+                    ]
+                });
+            }
+        });
     </script>
 
     {% block extra_js %}{% endblock %}
+    
+    <!-- Login Status Notification -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('logged_in') === 'true') {
+            showToast('Welcome back! You are now logged in.', 'success');
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
+    </script>
 </body>
 </html>

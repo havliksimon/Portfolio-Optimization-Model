@@ -3,16 +3,17 @@ Portfolio Optimizer - Example Portfolio Service
 ================================================
 
 Pre-computed example portfolio for visitors.
-Runs advanced analysis and caches results for fast display.
+Runs advanced analysis ONCE at startup and caches results.
+Admin can manually refresh via admin panel.
 """
 
 import json
 import pickle
-import hashlib
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
-from functools import lru_cache
 import logging
+from dataclasses import asdict, is_dataclass
 
 import pandas as pd
 import numpy as np
@@ -22,64 +23,307 @@ from services.risk_analytics import risk_analytics
 from services.advanced_statistics import advanced_statistics
 from services.advanced_risk import AdvancedRiskCalculator
 from services.factor_models import FamaFrenchModel
-from services.black_litterman import BlackLittermanModel
 from services.dashboard_charts import dashboard_charts
 from config import config
 
 logger = logging.getLogger(__name__)
 
 
-# Example portfolio - Berkshire-inspired diversified portfolio
+def serialize_for_template(obj: Any) -> Any:
+    """
+    Recursively convert dataclasses, numpy types, and pandas objects 
+    to JSON-serializable Python types for templates.
+    """
+    if is_dataclass(obj):
+        return {k: serialize_for_template(v) for k, v in asdict(obj).items()}
+    elif isinstance(obj, dict):
+        return {k: serialize_for_template(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [serialize_for_template(item) for item in obj]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.Series):
+        return obj.to_dict()
+    elif isinstance(obj, pd.DataFrame):
+        return obj.to_dict(orient='records')
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
+
+# Example portfolio - Professional diversified portfolio
 EXAMPLE_PORTFOLIO = {
     'name': 'Example Diversified Portfolio',
     'description': 'A balanced portfolio inspired by value investing principles with tech exposure',
     'holdings': [
-        {'ticker': 'AAPL', 'weight': 0.15, 'sector': 'Technology'},
-        {'ticker': 'MSFT', 'weight': 0.15, 'sector': 'Technology'},
-        {'ticker': 'GOOGL', 'weight': 0.12, 'sector': 'Technology'},
-        {'ticker': 'AMZN', 'weight': 0.10, 'sector': 'Consumer Discretionary'},
-        {'ticker': 'NVDA', 'weight': 0.08, 'sector': 'Technology'},
-        {'ticker': 'JPM', 'weight': 0.08, 'sector': 'Financials'},
-        {'ticker': 'JNJ', 'weight': 0.07, 'sector': 'Healthcare'},
-        {'ticker': 'V', 'weight': 0.07, 'sector': 'Financials'},
-        {'ticker': 'PG', 'weight': 0.06, 'sector': 'Consumer Staples'},
-        {'ticker': 'UNH', 'weight': 0.06, 'sector': 'Healthcare'},
-        {'ticker': 'HD', 'weight': 0.04, 'sector': 'Consumer Discretionary'},
-        {'ticker': 'MA', 'weight': 0.04, 'sector': 'Financials'},
-        {'ticker': 'LLY', 'weight': 0.04, 'sector': 'Healthcare'},
-        {'ticker': 'KO', 'weight': 0.03, 'sector': 'Consumer Staples'},
-        {'ticker': 'PEP', 'weight': 0.01, 'sector': 'Consumer Staples'}
+        {'ticker': 'AAPL', 'weight': 0.12, 'sector': 'Technology'},
+        {'ticker': 'MSFT', 'weight': 0.12, 'sector': 'Technology'},
+        {'ticker': 'GOOGL', 'weight': 0.10, 'sector': 'Technology'},
+        {'ticker': 'AMZN', 'weight': 0.08, 'sector': 'Consumer Discretionary'},
+        {'ticker': 'NVDA', 'weight': 0.07, 'sector': 'Technology'},
+        {'ticker': 'JPM', 'weight': 0.07, 'sector': 'Financials'},
+        {'ticker': 'JNJ', 'weight': 0.06, 'sector': 'Healthcare'},
+        {'ticker': 'V', 'weight': 0.06, 'sector': 'Financials'},
+        {'ticker': 'PG', 'weight': 0.05, 'sector': 'Consumer Staples'},
+        {'ticker': 'UNH', 'weight': 0.05, 'sector': 'Healthcare'},
+        {'ticker': 'HD', 'weight': 0.05, 'sector': 'Consumer Discretionary'},
+        {'ticker': 'MA', 'weight': 0.05, 'sector': 'Financials'},
+        {'ticker': 'LLY', 'weight': 0.05, 'sector': 'Healthcare'},
+        {'ticker': 'KO', 'weight': 0.05, 'sector': 'Consumer Staples'},
+        {'ticker': 'PEP', 'weight': 0.02, 'sector': 'Consumer Staples'}
     ],
     'period': '2y'
 }
+
+# Cache file path
+CACHE_DIR = 'data'
+CACHE_FILE = os.path.join(CACHE_DIR, 'example_portfolio_cache.pkl')
+
+
+def generate_ai_insights(metrics, distributions, stat_tests, pca_result, vol_analysis):
+    """
+    Generate AI-style quantitative research insights based on portfolio analysis.
+    """
+    insights = {
+        'risk_assessment': '',
+        'factor_analysis': '',
+        'recommendation': ''
+    }
+    
+    sharpe = getattr(metrics, 'sharpe_ratio', 0)
+    sortino = getattr(metrics, 'sortino_ratio', 0)
+    max_dd = getattr(metrics, 'max_drawdown', 0)
+    volatility = getattr(metrics, 'volatility', 0)
+    
+    if sharpe > 1.2:
+        risk_level = "excellent"
+        risk_desc = "superior risk-adjusted returns with exceptional compensation for volatility"
+    elif sharpe > 0.8:
+        risk_level = "strong"
+        risk_desc = "solid risk-adjusted performance above market norms"
+    elif sharpe > 0.5:
+        risk_level = "moderate"
+        risk_desc = "adequate risk-adjusted returns"
+    else:
+        risk_level = "concerning"
+        risk_desc = "below-average risk-adjusted performance suggesting need for optimization"
+    
+    insights['risk_assessment'] = (
+        f"This portfolio demonstrates {risk_level} risk-adjusted returns with a Sharpe ratio of {sharpe:.2f}, "
+        f"indicating {risk_desc}. The Sortino ratio of {sortino:.2f} suggests "
+        f"{'effective' if sortino > sharpe * 1.1 else 'adequate'} downside risk management. "
+        f"Maximum drawdown of {max_dd*100:.1f}% occurred over {getattr(metrics, 'max_drawdown_duration', 'N/A')} days, "
+        f"testing investor conviction during stressed periods."
+    )
+    
+    beta = getattr(metrics, 'beta', 1.0)
+    alpha = getattr(metrics, 'alpha', 0)
+    r_squared = getattr(metrics, 'r_squared', 0)
+    
+    if beta > 1.1:
+        beta_desc = "aggressive market exposure amplifying systematic movements"
+    elif beta < 0.9:
+        beta_desc = "defensive positioning reducing market sensitivity"
+    else:
+        beta_desc = "neutral market sensitivity aligned with benchmark"
+    
+    best_dist = 'Normal'
+    if distributions:
+        try:
+            best_dist = min(distributions.items(), key=lambda x: x[1].aic)[0]
+        except:
+            pass
+    
+    insights['factor_analysis'] = (
+        f"Portfolio exhibits a market beta of {beta:.2f}, indicating {beta_desc}. "
+        f"Alpha generation of {alpha*100:.1f}% suggests {'positive' if alpha > 0 else 'negative'} "
+        f"security selection skill (R² = {r_squared:.2f}). "
+        f"Return distribution is best modeled by {best_dist} distribution. "
+    )
+    
+    if stat_tests:
+        insights['factor_analysis'] += (
+            f"Jarque-Bera test indicates returns are {'normally distributed' if stat_tests.is_normal else 'non-normal with fat tails'}. "
+        )
+    
+    if pca_result and hasattr(pca_result, 'explained_variance_ratio'):
+        pc1_var = pca_result.explained_variance_ratio[0] * 100
+        insights['factor_analysis'] += (
+            f"PCA reveals first principal component explains {pc1_var:.1f}% of variance."
+        )
+    
+    recommendations = []
+    
+    if volatility > 0.25:
+        recommendations.append("High volatility suggests consideration of hedging strategies or defensive allocations")
+    
+    if stat_tests and not stat_tests.is_normal:
+        recommendations.append("Non-normal distribution detected - tail risk hedging recommended")
+    
+    if vol_analysis and getattr(vol_analysis, 'has_arch_effects', False):
+        recommendations.append("Volatility clustering detected - GARCH models may improve risk forecasting")
+    
+    if sharpe < 0.5:
+        recommendations.append("Consider rebalancing toward higher Sharpe ratio assets")
+    
+    if max_dd < -0.30:
+        recommendations.append("Severe drawdown potential - implement stop-loss or protective put strategies")
+    
+    if not recommendations:
+        recommendations.append("Portfolio structure appears sound - maintain current allocation with regular rebalancing")
+    
+    insights['recommendation'] = " ".join(recommendations)
+    
+    return insights
 
 
 class ExamplePortfolioService:
     """
     Service for managing and serving the example portfolio.
     
-    Pre-computes all analysis and caches results.
-    Updates daily to keep data fresh.
+    CRITICAL: Computes analysis ONCE at startup and caches to disk.
+    Subsequent page loads serve from memory - NO recomputation.
+    Admin can force refresh via admin panel.
     """
     
     def __init__(self):
-        self._cache = {}
-        self._last_update = None
-        self._cache_duration = timedelta(hours=6)  # Update every 6 hours
+        self._cached_data: Optional[Dict[str, Any]] = None
+        self._cache_loaded = False
+        self._last_computed: Optional[datetime] = None
         
-    def _should_refresh(self) -> bool:
-        """Check if cached data needs refresh."""
-        if self._last_update is None:
-            return True
-        return datetime.utcnow() - self._last_update > self._cache_duration
+    def initialize(self):
+        """
+        Initialize the service - call this once at app startup.
+        Loads from disk cache if available, otherwise computes fresh.
+        """
+        logger.info("Initializing example portfolio service...")
+        
+        # Ensure cache directory exists
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        
+        # Try to load from disk cache first
+        if self._load_from_disk():
+            logger.info("Example portfolio loaded from disk cache")
+            return
+        
+        # Otherwise compute fresh
+        logger.info("No disk cache found, computing fresh analysis...")
+        self._cached_data = self._compute_analysis()
+        self._save_to_disk()
+        logger.info("Example portfolio analysis complete and cached to disk")
     
-    def _compute_portfolio_analysis(self) -> Dict[str, Any]:
+    def _load_from_disk(self) -> bool:
+        """Load cached analysis from disk."""
+        try:
+            if os.path.exists(CACHE_FILE):
+                with open(CACHE_FILE, 'rb') as f:
+                    cache_data = pickle.load(f)
+                    
+                # Check if cache is not too old (24 hours)
+                cache_time = cache_data.get('computed_at')
+                if cache_time:
+                    cache_age = datetime.utcnow() - cache_time
+                    if cache_age < timedelta(hours=24):
+                        self._cached_data = cache_data.get('data')
+                        self._last_computed = cache_time
+                        self._cache_loaded = True
+                        return True
+                    else:
+                        logger.info(f"Disk cache is {cache_age.total_seconds()/3600:.1f} hours old, will recompute")
+                else:
+                    self._cached_data = cache_data.get('data')
+                    self._cache_loaded = True
+                    return True
+        except Exception as e:
+            logger.warning(f"Failed to load disk cache: {e}")
+        
+        return False
+    
+    def _save_to_disk(self) -> bool:
+        """Save cached analysis to disk."""
+        try:
+            cache_data = {
+                'data': self._cached_data,
+                'computed_at': datetime.utcnow(),
+                'version': '1.0'
+            }
+            with open(CACHE_FILE, 'wb') as f:
+                pickle.dump(cache_data, f)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save disk cache: {e}")
+            return False
+    
+    def get_analysis(self) -> Dict[str, Any]:
+        """
+        Get the pre-computed example portfolio analysis.
+        
+        This is FAST - returns cached data from memory.
+        No database queries, no API calls, no computation.
+        """
+        if self._cached_data is None:
+            # Fallback - should not happen if initialize() was called
+            logger.warning("Cache not initialized, computing on demand")
+            self._cached_data = self._compute_analysis()
+        
+        # Convert dataclasses and numpy types to Python dicts for templates
+        result = serialize_for_template(self._cached_data)
+        
+        # Add has_arch_effects to metrics for template compatibility
+        if 'volatility_analysis' in result and 'metrics' in result:
+            result['metrics']['has_arch_effects'] = result['volatility_analysis'].get('has_arch_effects', False)
+        
+        return result
+    
+    def refresh_cache(self) -> Dict[str, Any]:
+        """
+        Force recompute and refresh the cache.
+        Call this from admin panel to update with fresh data.
+        
+        Returns the new cached data.
+        """
+        logger.info("Admin requested cache refresh, recomputing...")
+        self._cached_data = self._compute_analysis()
+        self._save_to_disk()
+        logger.info("Cache refresh complete")
+        return self._cached_data
+    
+    def get_cache_info(self) -> Dict[str, Any]:
+        """Get information about the current cache."""
+        return {
+            'has_data': self._cached_data is not None,
+            'last_computed': self._last_computed.isoformat() if self._last_computed else None,
+            'cache_age_hours': (datetime.utcnow() - self._last_computed).total_seconds() / 3600 if self._last_computed else None,
+            'disk_cache_exists': os.path.exists(CACHE_FILE),
+            'cache_file_path': os.path.abspath(CACHE_FILE)
+        }
+    
+    def clear_cache(self) -> bool:
+        """Clear the disk cache."""
+        try:
+            if os.path.exists(CACHE_FILE):
+                os.remove(CACHE_FILE)
+                logger.info("Disk cache cleared")
+            self._cached_data = None
+            self._cache_loaded = False
+            self._last_computed = None
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear cache: {e}")
+            return False
+    
+    def _compute_analysis(self) -> Dict[str, Any]:
         """
         Compute comprehensive portfolio analysis.
-        
-        This is the heavy lifting - fetches data and runs all analyses.
+        This is the HEAVY operation - takes ~10 seconds.
+        Only called at startup or manual refresh.
         """
         logger.info("Computing example portfolio analysis...")
+        start_time = datetime.utcnow()
         
         holdings = EXAMPLE_PORTFOLIO['holdings']
         tickers = [h['ticker'] for h in holdings]
@@ -102,258 +346,231 @@ class ExamplePortfolioService:
         weights_array = weights_array / weights_array.sum()  # Normalize
         portfolio_returns = returns_df @ weights_array
         
-        # 1. Basic Risk Metrics
-        logger.info("Computing risk metrics...")
+        # Market data for beta calculation
         spy_data = market_data_service.fetch_historical_data('SPY', period=period)
-        benchmark_returns = spy_data.returns if spy_data else None
+        market_returns = spy_data.returns if spy_data else None
         
-        metrics = risk_analytics.calculate_comprehensive_metrics(
-            portfolio_returns,
-            benchmark_returns=benchmark_returns
-        )
+        # 1. Risk Metrics
+        logger.info("Computing risk metrics...")
+        risk_metrics = risk_analytics.calculate_comprehensive_metrics(portfolio_returns, market_returns)
         
-        # 2. Rolling Metrics
-        logger.info("Computing rolling metrics...")
-        rolling = risk_analytics.calculate_rolling_metrics(
-            portfolio_returns,
-            benchmark_returns=benchmark_returns
-        )
-        
-        # 3. Advanced Risk
+        # 2. Advanced Risk
         logger.info("Computing advanced risk...")
-        adv_calc = AdvancedRiskCalculator(returns_df, weights_array)
-        advanced_risk = {
-            'modified_var_95': adv_calc.modified_var(0.95),
-            'modified_var_99': adv_calc.modified_var(0.99),
-            'kelly': adv_calc.kelly_criterion(),
-            'ulcer': adv_calc.ulcer_index(),
-            'drawdown_risk': adv_calc.drawdown_at_risk(),
-            'tail_risk': adv_calc.tail_risk_metrics()
-        }
+        adv_risk = AdvancedRiskCalculator(returns_df, weights_array)
+        advanced_risk_metrics = adv_risk.calculate_all()
         
-        # 4. Distribution Fitting
+        # 3. Distribution Fitting
         logger.info("Fitting distributions...")
-        distributions = advanced_statistics.fit_distributions(portfolio_returns)
+        dist_results = advanced_statistics.fit_distributions(portfolio_returns)
         
-        # 5. Monte Carlo
+        # 4. Monte Carlo Simulation
         logger.info("Running Monte Carlo...")
-        mc_result = advanced_statistics.monte_carlo_simulation(
-            portfolio_returns,
+        mc_results = advanced_statistics.monte_carlo_simulation(
+            portfolio_returns, 
             weights_array,
             initial_value=100000,
             n_simulations=5000,
             n_days=252
         )
         
-        # 6. Statistical Tests
+        # 5. Statistical Tests
         logger.info("Running statistical tests...")
-        stat_tests = advanced_statistics.run_statistical_tests(portfolio_returns)
+        stats_tests = advanced_statistics.run_statistical_tests(portfolio_returns)
         
-        # 7. Factor Exposure
-        logger.info("Computing factor exposure...")
-        try:
-            ff_model = FamaFrenchModel()
-            factor_exposure = ff_model.estimate_exposure(portfolio_returns, model='5factor')
-            factor_data = {
-                'market_beta': factor_exposure.market_beta,
-                'smb_beta': factor_exposure.smb_beta,
-                'hml_beta': factor_exposure.hml_beta,
-                'rmw_beta': factor_exposure.rmw_beta,
-                'cma_beta': factor_exposure.cma_beta,
-                'alpha': factor_exposure.alpha,
-                'r_squared': factor_exposure.r_squared,
-                'factor_contributions': factor_exposure.factor_contributions
-            }
-        except Exception as e:
-            logger.warning(f"Factor exposure failed: {e}")
-            factor_data = {}
+        # 6. Rolling metrics
+        logger.info("Computing rolling metrics...")
+        rolling = risk_analytics.calculate_rolling_metrics(
+            portfolio_returns,
+            benchmark_returns=market_returns
+        )
         
-        # 8. PCA
-        logger.info("Computing PCA...")
-        pca_result = advanced_statistics.principal_component_analysis(returns_df)
-        
-        # 9. Volatility Analysis
-        logger.info("Analyzing volatility...")
-        vol_analysis = advanced_statistics.analyze_volatility_clustering(portfolio_returns)
-        
-        # 10. Tail Risk
-        logger.info("Computing tail risk...")
-        tail_risk = advanced_statistics.extreme_value_analysis(portfolio_returns)
-        
-        # 11. Stress Test
+        # 7. Stress test
         logger.info("Running stress tests...")
         stress_results = risk_analytics.stress_test(portfolio_returns, weights_dict)
         
-        # 12. All Charts
-        logger.info("Generating charts...")
-        charts = dashboard_charts.get_all_charts(
-            returns_df,
-            portfolio_returns,
-            weights_dict,
-            factor_data,
-            stress_results,
-            period
+        # 8. Correlation matrix
+        logger.info("Computing correlation matrix...")
+        corr_matrix = risk_analytics.calculate_correlation_matrix(returns_df)
+        
+        # 9. Drawdown series
+        logger.info("Computing drawdown series...")
+        cum_returns = (1 + portfolio_returns).cumprod()
+        rolling_max = cum_returns.expanding().max()
+        drawdown_series = (cum_returns - rolling_max) / rolling_max
+        
+        # 10. Confidence intervals
+        logger.info("Computing confidence intervals...")
+        confidence_intervals = advanced_statistics.calculate_confidence_intervals(
+            portfolio_returns, confidence=0.95
         )
         
-        # 13. Optimization Alternatives
-        logger.info("Computing optimizations...")
-        from services.optimization import PortfolioOptimizer, OptimizationConstraints, OptimizationMethod
+        # 11. Volatility clustering analysis
+        logger.info("Analyzing volatility clustering...")
+        vol_analysis = advanced_statistics.analyze_volatility_clustering(portfolio_returns)
         
-        optimizer = PortfolioOptimizer(returns_df)
-        constraints = OptimizationConstraints(max_position_size=0.20)
+        # 12. Tail risk (Extreme Value Theory)
+        logger.info("Computing tail risk metrics...")
+        tail_risk = advanced_statistics.extreme_value_analysis(portfolio_returns)
         
-        optimizations = {}
-        try:
-            max_sharpe = optimizer.optimize(method=OptimizationMethod.MAX_SHARPE, constraints=constraints)
-            optimizations['max_sharpe'] = {
-                'weights': {returns_df.columns[i]: max_sharpe.weights[i] 
-                           for i in range(len(returns_df.columns))},
-                'expected_return': max_sharpe.expected_return,
-                'volatility': max_sharpe.volatility,
-                'sharpe_ratio': max_sharpe.sharpe_ratio
-            }
-        except Exception as e:
-            logger.warning(f"Max Sharpe failed: {e}")
+        # 13. PCA
+        logger.info("Running PCA...")
+        pca_result = advanced_statistics.principal_component_analysis(returns_df)
         
-        try:
-            min_var = optimizer.optimize(method=OptimizationMethod.MIN_VARIANCE, constraints=constraints)
-            optimizations['min_variance'] = {
-                'weights': {returns_df.columns[i]: min_var.weights[i] 
-                           for i in range(len(returns_df.columns))},
-                'expected_return': min_var.expected_return,
-                'volatility': min_var.volatility,
-                'sharpe_ratio': min_var.sharpe_ratio
-            }
-        except Exception as e:
-            logger.warning(f"Min Variance failed: {e}")
+        # 14. Rolling statistics
+        logger.info("Computing rolling statistics...")
+        rolling_stats = advanced_statistics.calculate_rolling_statistics(portfolio_returns, window=63)
         
-        # Compile results
-        results = {
+        # 15. Benchmarks
+        logger.info("Fetching benchmark data...")
+        benchmarks = risk_analytics.get_benchmark_data(['SPY', 'VT'], period=period)
+        
+        # 16. Monthly returns
+        logger.info("Computing monthly returns heatmap...")
+        monthly_returns_data = dashboard_charts.get_monthly_returns_heatmap(portfolio_returns)
+        
+        # 17. Rolling correlation
+        logger.info("Computing rolling correlation...")
+        rolling_correlation = dashboard_charts.get_rolling_correlation_chart(returns_df, window=90)
+        
+        # 18. Factor Exposure
+        logger.info("Computing factor exposure...")
+        ff_model = FamaFrenchModel()
+        factor_exposure = ff_model.estimate_exposure(portfolio_returns)
+        
+        # 19. AI Insights
+        logger.info("Generating AI insights...")
+        ai_insights = generate_ai_insights(
+            risk_metrics,
+            dist_results,
+            stats_tests,
+            pca_result,
+            vol_analysis
+        )
+        
+        # 20. Charts
+        logger.info("Generating charts...")
+        charts = dashboard_charts.get_all_charts(
+            returns_df=returns_df,
+            portfolio_returns=portfolio_returns,
+            weights=weights_dict,
+            factor_exposure={'exposure': factor_exposure.__dict__ if factor_exposure else {}},
+            period=period
+        )
+        
+        # Fix charts to include missing data that index.html expects
+        # Add beta to rolling_metrics (dashboard_charts doesn't include it)
+        if 'rolling_metrics' in charts and '60d' in charts['rolling_metrics']:
+            charts['rolling_metrics']['60d']['beta'] = rolling['beta'].fillna(1.0).tolist()
+        
+        # Add volatility chart data (dates, returns for returns chart)
+        charts['volatility'] = {
+            'dates': portfolio_returns.index.strftime('%Y-%m-%d').tolist(),
+            'returns': portfolio_returns.tolist()
+        }
+        
+        # 8. Holdings with info
+        holdings_with_info = []
+        for h in holdings:
+            ticker = h['ticker']
+            data = valid_data.get(ticker)
+            if data:
+                holdings_with_info.append({
+                    'ticker': ticker,
+                    'weight': h['weight'],
+                    'name': ticker,
+                    'sector': h.get('sector', 'Unknown'),
+                    'price': float(data.prices.iloc[-1]) if data.prices is not None else None
+                })
+        
+        # Combine all results
+        result = {
             'meta': {
                 'name': EXAMPLE_PORTFOLIO['name'],
                 'description': EXAMPLE_PORTFOLIO['description'],
                 'computed_at': datetime.utcnow().isoformat(),
                 'period': period,
-                'n_assets': len(valid_data)
+                'n_assets': len(holdings),
+                'n_simulations': 5000
             },
-            'holdings': [
-                {
-                    'ticker': h['ticker'],
-                    'weight': float(weights_dict.get(h['ticker'], 0)),
-                    'sector': h.get('sector', 'Unknown')
-                }
-                for h in holdings if h['ticker'] in valid_data
-            ],
-            'metrics': {
-                'total_return': metrics.total_return,
-                'annualized_return': metrics.annualized_return,
-                'volatility': metrics.volatility,
-                'sharpe_ratio': metrics.sharpe_ratio,
-                'sortino_ratio': metrics.sortino_ratio,
-                'max_drawdown': metrics.max_drawdown,
-                'var_95': metrics.var_95,
-                'cvar_95': metrics.cvar_95,
-                'beta': metrics.beta,
-                'alpha': metrics.alpha
+            'metrics': risk_metrics,
+            'advanced_risk': advanced_risk_metrics,
+            'distributions': dist_results,
+            'distributions_dict': {
+                'best_fit': min(dist_results.items(), key=lambda x: x[1].aic)[0] if dist_results else 'Normal',
+                **{name: d for name, d in dist_results.items()}
             },
-            'advanced_risk': advanced_risk,
-            'distributions': {
-                name: {
-                    'mean': dist.mean,
-                    'std': dist.std,
-                    'aic': dist.aic,
-                    'bic': dist.bic,
-                    'p_value': dist.p_value
-                }
-                for name, dist in distributions.items()
-            },
-            'monte_carlo': {
-                'mean_final': mc_result.mean_final,
-                'median_final': mc_result.median_final,
-                'var_95': mc_result.var_95,
-                'probability_profit': mc_result.probability_profit,
-                'paths': mc_result.paths[::100].tolist() if len(mc_result.paths) > 0 else []
-            },
-            'statistical_tests': {
-                'jarque_bera_stat': stat_tests.jarque_bera_stat,
-                'jarque_bera_pvalue': stat_tests.jarque_bera_pvalue,
-                'is_normal': stat_tests.is_normal,
-                'ljung_box_stat': stat_tests.ljung_box_stat,
-                'has_autocorrelation': stat_tests.has_autocorrelation
-            },
-            'factor_exposure': factor_data,
-            'pca': {
-                'explained_variance_ratio': pca_result.explained_variance_ratio[:5].tolist(),
-                'condition_number': pca_result.condition_number
-            },
-            'volatility_analysis': {
-                'has_arch_effects': vol_analysis.has_arch_effects,
-                'arch_lm_pvalue': vol_analysis.arch_lm_pvalue
-            },
-            'tail_risk': {
-                'hill_estimator': tail_risk.hill_estimator,
-                'tail_index': tail_risk.tail_index,
-                'black_swan_prob': tail_risk.black_swan_prob
+            'monte_carlo': mc_results,
+            'statistical_tests': stats_tests,
+            'factor_exposure': factor_exposure,
+            'charts': charts,
+            'holdings': holdings_with_info,
+            'rolling_metrics': {
+                'dates': rolling.index.strftime('%Y-%m-%d').tolist(),
+                'volatility': rolling['volatility'].tolist(),
+                'drawdown': rolling['drawdown'].tolist(),
+                'beta': rolling['beta'].fillna(1.0).tolist(),
+                'sharpe': rolling['sharpe'].tolist()
             },
             'stress_test': stress_results,
-            'optimizations': optimizations,
-            'charts': charts
+            'correlation_matrix': corr_matrix.to_dict(),
+            'drawdown_series': {
+                'dates': drawdown_series.index.strftime('%Y-%m-%d').tolist(),
+                'drawdown': drawdown_series.tolist()
+            },
+            'confidence_intervals': {k: list(v) for k, v in confidence_intervals.items()},
+            'volatility_analysis': vol_analysis,
+            'tail_risk': tail_risk,
+            'pca': pca_result,
+            'rolling_stats_63d': {
+                'dates': rolling_stats.index.strftime('%Y-%m-%d').tolist(),
+                'mean': rolling_stats['mean'].tolist(),
+                'std': rolling_stats['std'].tolist(),
+                'skewness': rolling_stats['skewness'].tolist()
+            } if rolling_stats is not None else None,
+            'benchmarks': {
+                name: (1 + returns).cumprod().tolist() 
+                for name, returns in benchmarks.items()
+            } if benchmarks else {},
+            'monthly_returns': monthly_returns_data,
+            'rolling_correlation': rolling_correlation,
+            'ai_insights': ai_insights
         }
         
-        logger.info("Example portfolio analysis complete!")
-        return results
+        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        logger.info(f"Example portfolio analysis complete! ({elapsed:.1f}s)")
+        self._last_computed = datetime.utcnow()
+        
+        return result
     
     def _get_fallback_data(self) -> Dict[str, Any]:
-        """Return fallback data if analysis fails."""
+        """Return minimal fallback data if computation fails."""
         return {
             'meta': {
                 'name': EXAMPLE_PORTFOLIO['name'],
-                'error': 'Data temporarily unavailable',
-                'computed_at': datetime.utcnow().isoformat()
+                'description': EXAMPLE_PORTFOLIO['description'],
+                'computed_at': datetime.utcnow().isoformat(),
+                'error': 'Failed to compute full analysis'
             },
+            'metrics': {},
             'holdings': EXAMPLE_PORTFOLIO['holdings'],
-            'metrics': {}
-        }
-    
-    def get_analysis(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """
-        Get example portfolio analysis.
-        
-        Returns cached data if available and fresh,
-        otherwise computes new analysis.
-        """
-        cache_key = 'example_portfolio_analysis'
-        
-        if not force_refresh and not self._should_refresh():
-            if cache_key in self._cache:
-                return self._cache[cache_key]
-        
-        # Compute fresh analysis
-        results = self._compute_portfolio_analysis()
-        
-        # Cache results
-        self._cache[cache_key] = results
-        self._last_update = datetime.utcnow()
-        
-        return results
-    
-    def get_summary(self) -> Dict[str, Any]:
-        """Get quick summary for display."""
-        analysis = self.get_analysis()
-        
-        return {
-            'name': analysis['meta']['name'],
-            'description': analysis['meta']['description'],
-            'holdings': analysis['holdings'][:10],  # Top 10
-            'key_metrics': {
-                'annualized_return': analysis.get('metrics', {}).get('annualized_return', 0),
-                'volatility': analysis.get('metrics', {}).get('volatility', 0),
-                'sharpe_ratio': analysis.get('metrics', {}).get('sharpe_ratio', 0),
-                'max_drawdown': analysis.get('metrics', {}).get('max_drawdown', 0)
-            },
-            'computed_at': analysis['meta']['computed_at']
+            'charts': {}
         }
 
 
-# Singleton instance
+# Global singleton instance
 example_portfolio_service = ExamplePortfolioService()
+
+
+def initialize_example_portfolio():
+    """Call this once at application startup."""
+    example_portfolio_service.initialize()
+
+
+if __name__ == "__main__":
+    # Test the service
+    logging.basicConfig(level=logging.INFO)
+    service = ExamplePortfolioService()
+    service.initialize()
+    data = service.get_analysis()
+    print(f"Analysis computed at: {data['meta']['computed_at']}")
+    print(f"Cache info: {service.get_cache_info()}")

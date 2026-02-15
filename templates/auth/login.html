@@ -55,24 +55,37 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing in...';
     
     try {
         const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, password }),
+            credentials: 'same-origin'
         });
         
         const data = await response.json();
+        console.log('Login response:', data);
         
-        if (response.ok) {
+        if (response.ok && data.success) {
             showToast('Login successful! Redirecting...', 'success');
-            setTimeout(() => window.location.href = '/', 1000);
+            // Force reload with cache bypass
+            setTimeout(() => {
+                window.location.href = '/?logged_in=' + Date.now();
+            }, 1000);
         } else {
             showToast(data.error || 'Login failed', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
         }
     } catch (error) {
+        console.error('Login error:', error);
         showToast('Login error: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
     }
 });
 </script>

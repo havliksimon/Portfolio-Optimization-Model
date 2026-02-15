@@ -141,11 +141,12 @@ class DashboardChartService:
                 sectors[ticker] = 'Unknown'
                 market_caps[ticker] = 0
         
-        # Pie chart data
-        pie_data = [
-            {'ticker': t, 'weight': w, 'sector': sectors.get(t, 'Unknown')}
-            for t, w in weights.items()
-        ]
+        # Pie chart data - format for template compatibility
+        sorted_weights = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+        pie_data = {
+            'labels': [t for t, w in sorted_weights],
+            'values': [w for t, w in sorted_weights]
+        }
         
         # Sector aggregation
         sector_weights = {}
@@ -245,12 +246,13 @@ class DashboardChartService:
                                      current_weights: np.ndarray,
                                      n_points: int = 50) -> Dict[str, Any]:
         """
-        Generate efficient frontier chart data.
+        Generate efficient frontier chart data compatible with frontend.
         """
         mu = returns_df.mean() * 252
         Sigma = returns_df.cov() * 252
         
         n = len(mu)
+        tickers = returns_df.columns.tolist()
         
         # Generate random portfolios
         np.random.seed(42)
@@ -270,13 +272,38 @@ class DashboardChartService:
         # Min variance
         min_var_idx = np.argmin(port_vols)
         
+        # Calculate efficient frontier curve
+        # Use optimization to find efficient frontier
+        target_returns = np.linspace(port_returns.min(), port_returns.max() * 1.2, n_points)
+        efficient_vols = []
+        efficient_rets = []
+        
+        for target in target_returns:
+            # Find minimum variance for target return
+            mask = port_returns >= target - 0.01
+            if mask.sum() > 0:
+                idx = np.argmin(port_vols[mask])
+                efficient_vols.append(float(port_vols[mask][idx]))
+                efficient_rets.append(float(port_returns[mask][idx]))
+        
+        # Format for template compatibility
+        frontier_points = [
+            {'return_annualized': r, 'volatility': v}
+            for r, v in zip(efficient_rets, efficient_vols)
+        ]
+        
+        individual_assets = [
+            {'ticker': t, 'return_annualized': float(mu[t]), 'volatility': float(np.sqrt(Sigma.loc[t, t]))}
+            for t in tickers
+        ]
+        
         return {
-            'frontier': {
+            'random_portfolios': {
                 'returns': port_returns.tolist(),
-                'volatilities': port_vols.tolist(),
-                'sharpes': port_sharpes.tolist()
+                'volatility': port_vols.tolist(),
+                'sharpe': port_sharpes.tolist()
             },
-            'current': {
+            'current_portfolio': {
                 'return': float(current_return),
                 'volatility': float(current_vol),
                 'sharpe': float(current_return / current_vol) if current_vol > 0 else 0
@@ -284,17 +311,15 @@ class DashboardChartService:
             'max_sharpe': {
                 'return': float(port_returns[max_sharpe_idx]),
                 'volatility': float(port_vols[max_sharpe_idx]),
-                'sharpe': float(port_sharpes[max_sharpe_idx]),
-                'weights': random_weights[max_sharpe_idx].tolist()
+                'sharpe': float(port_sharpes[max_sharpe_idx])
             },
-            'min_variance': {
+            'min_vol': {
                 'return': float(port_returns[min_var_idx]),
-                'volatility': float(port_vols[min_var_idx])
+                'volatility': float(port_vols[min_var_idx]),
+                'sharpe': float(port_sharpes[min_var_idx])
             },
-            'individual_assets': [
-                {'ticker': t, 'return': mu[t], 'volatility': np.sqrt(Sigma.loc[t, t])}
-                for t in returns_df.columns
-            ]
+            'frontier': frontier_points,
+            'individual_assets': individual_assets
         }
     
     def get_factor_exposure_chart(self, factor_exposure: Dict) -> Dict[str, Any]:
@@ -385,11 +410,18 @@ class DashboardChartService:
                 'severity': 'high' if impact < -0.3 else 'medium' if impact < -0.15 else 'low'
             })
         
-        return {
-            'scenarios': scenarios,
-            'worst_case': min(stress_results.values()),
-            'avg_impact': np.mean(list(stress_results.values()))
-        }
+        if stress_results:
+            return {
+                'scenarios': scenarios,
+                'worst_case': min(stress_results.values()),
+                'avg_impact': np.mean(list(stress_results.values()))
+            }
+        else:
+            return {
+                'scenarios': [],
+                'worst_case': 0.0,
+                'avg_impact': 0.0
+            }
     
     def get_monthly_returns_heatmap(self, returns: pd.Series) -> Dict[str, Any]:
         """
@@ -420,6 +452,129 @@ class DashboardChartService:
             'data': matrix
         }
     
+    def get_monte_carlo_chart(self, 
+                              returns: pd.Series, 
+                              weights: np.ndarray,
+                              n_paths: int = 100,
+                              n_days: int = 252,
+                              initial_value: float = 100000) -> Dict[str, Any]:
+        """
+        Generate Monte Carlo simulation chart data.
+        """
+        np.random.seed(42)
+        returns_clean = returns.dropna()
+        
+        # Bootstrap simulation
+        simulated_returns = np.random.choice(
+            returns_clean, 
+            size=(n_paths, n_days),
+            replace=True
+        )
+        
+        # Calculate paths
+        price_paths = np.zeros((n_paths, n_days + 1))
+        price_paths[:, 0] = initial_value
+        
+        for t in range(1, n_days + 1):
+            price_paths[:, t] = price_paths[:, t-1] * (1 + simulated_returns[:, t-1])
+        
+        # Calculate percentiles for band
+        percentiles = [5, 25, 50, 75, 95]
+        bands = {}
+        for p in percentiles:
+            bands[f'p{p}'] = np.percentile(price_paths, p, axis=0).tolist()
+        
+        # Sample paths for display (reduce to 50 for performance)
+        step = max(1, n_paths // 50)
+        sample_paths = price_paths[::step].tolist()
+        
+        return {
+            'paths': sample_paths,
+            'percentiles': bands,
+            'days': list(range(n_days + 1)),
+            'initial_value': initial_value
+        }
+    
+    def get_rolling_statistics_chart(self, returns: pd.Series, window: int = 63) -> Dict[str, Any]:
+        """
+        Generate rolling statistics with confidence bands.
+        """
+        returns_clean = returns.dropna()
+        
+        rolling_mean = returns_clean.rolling(window).mean() * 252
+        rolling_std = returns_clean.rolling(window).std() * np.sqrt(252)
+        rolling_sharpe = rolling_mean / rolling_std
+        
+        # Standard error for confidence bands
+        sem = rolling_std / np.sqrt(window)
+        mean_upper = rolling_mean + 1.96 * sem
+        mean_lower = rolling_mean - 1.96 * sem
+        
+        return {
+            'dates': returns_clean.index.strftime('%Y-%m-%d').tolist(),
+            'mean': rolling_mean.tolist(),
+            'std': rolling_std.tolist(),
+            'sharpe': rolling_sharpe.tolist(),
+            'mean_upper': mean_upper.tolist(),
+            'mean_lower': mean_lower.tolist()
+        }
+    
+    def get_pca_chart(self, returns_df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Generate PCA visualization data with explained variance and loadings.
+        """
+        from sklearn.decomposition import PCA
+        from sklearn.preprocessing import StandardScaler
+        
+        returns_clean = returns_df.dropna()
+        tickers = returns_clean.columns.tolist()
+        
+        # Standardize
+        scaler = StandardScaler()
+        standardized = scaler.fit_transform(returns_clean)
+        
+        # PCA with all components
+        n_components = min(len(tickers), 10)
+        pca = PCA(n_components=n_components)
+        pcs = pca.fit_transform(standardized)
+        
+        # Explained variance
+        explained_var = pca.explained_variance_ratio_
+        cumulative_var = np.cumsum(explained_var)
+        
+        # Loadings (component vectors)
+        loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+        
+        return {
+            'scores': {
+                'pc1': pcs[:, 0].tolist(),
+                'pc2': pcs[:, 1].tolist()
+            },
+            'loadings': loadings.tolist(),
+            'tickers': tickers,
+            'explained_variance': explained_var.tolist(),
+            'cumulative_variance': cumulative_var.tolist(),
+            'components': list(range(1, n_components + 1)),
+            'condition_number': explained_var[0] / explained_var[-1] if explained_var[-1] > 0 else np.inf
+        }
+    
+    def get_drawdown_chart(self, returns: pd.Series) -> Dict[str, Any]:
+        """
+        Generate drawdown analysis chart data.
+        """
+        returns_clean = returns.dropna()
+        cum_returns = (1 + returns_clean).cumprod()
+        rolling_max = cum_returns.expanding().max()
+        drawdown = (cum_returns - rolling_max) / rolling_max
+        
+        return {
+            'dates': returns_clean.index.strftime('%Y-%m-%d').tolist(),
+            'drawdown': drawdown.tolist(),
+            'cumulative_returns': cum_returns.tolist(),
+            'max_drawdown': drawdown.min(),
+            'max_drawdown_date': drawdown.idxmin().strftime('%Y-%m-%d')
+        }
+    
     def get_all_charts(self,
                       returns_df: pd.DataFrame,
                       portfolio_returns: pd.Series,
@@ -437,13 +592,17 @@ class DashboardChartService:
                                                           returns_df.columns.tolist(), 
                                                           period),
             'rolling_metrics': self.get_rolling_metrics_charts(portfolio_returns),
+            'rolling_stats_63d': self.get_rolling_statistics_chart(portfolio_returns, window=63),
             'allocation': self.get_allocation_charts(weights, returns_df.columns.tolist()),
             'risk_contribution': self.get_risk_contribution_chart(returns_df, weights_array),
             'return_distribution': self.get_return_distribution_charts(portfolio_returns),
             'efficient_frontier': self.get_efficient_frontier_chart(returns_df, weights_array),
             'rolling_correlation': self.get_rolling_correlation_chart(returns_df),
             'monthly_returns': self.get_monthly_returns_heatmap(portfolio_returns),
+            'pca': self.get_pca_chart(returns_df),
             'pca_biplot': self.get_pca_biplot(returns_df),
+            'monte_carlo': self.get_monte_carlo_chart(portfolio_returns, weights_array),
+            'drawdown': self.get_drawdown_chart(portfolio_returns),
             'factor_exposure': self.get_factor_exposure_chart(factor_exposure or {}),
             'stress_test': self.get_stress_test_chart(stress_results or {})
         }

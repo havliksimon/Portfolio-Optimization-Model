@@ -139,19 +139,45 @@ def create_app() -> Flask:
     @login_manager.user_loader
     def load_user(user_id):
         from models.auth import User
-        return User.query.get(int(user_id))
+        try:
+            user = User.query.get(int(user_id))
+            if user:
+                logger.debug(f"User loaded: {user.email}")
+            return user
+        except Exception as e:
+            logger.error(f"Error loading user {user_id}: {e}")
+            return None
     
     # Register blueprints
     app.register_blueprint(auth_bp)
     
-    # Initialize example portfolio on startup (in background)
+    # Context processor to make current_user available in all templates
+    @app.context_processor
+    def inject_user():
+        from flask_login import current_user
+        return dict(current_user=current_user)
+    
+    # Debug: Log authentication status for each request (only in debug mode)
+    @app.before_request
+    def log_auth_status():
+        if not config.DEBUG:
+            return
+        from flask_login import current_user
+        from flask import request, session
+        if request.endpoint and not request.endpoint.startswith('static'):
+            if current_user.is_authenticated:
+                logger.debug(f"Auth OK: {current_user.email} accessing {request.endpoint}")
+            else:
+                logger.debug(f"No auth for {request.endpoint}")
+    
+    # Initialize example portfolio on startup (computes once, caches to disk)
     with app.app_context():
         try:
-            # Pre-compute example portfolio
-            example_portfolio_service.get_analysis()
-            logger.info("Example portfolio analysis pre-computed")
+            from services.example_portfolio import initialize_example_portfolio
+            initialize_example_portfolio()
+            logger.info("Example portfolio service initialized")
         except Exception as e:
-            logger.warning(f"Could not pre-compute example portfolio: {e}")
+            logger.warning(f"Could not initialize example portfolio service: {e}")
     
     return app
 
@@ -172,21 +198,17 @@ def index():
     """Main dashboard view with example portfolio analysis."""
     try:
         # Get pre-computed example portfolio analysis
+        # Data is already serialized to Python dicts by the service
         example_data = example_portfolio_service.get_analysis()
         
-        # Convert numpy types to Python types for JSON serialization
-        from flask import json
-        example_data_json = json.dumps(example_data, default=str)
-        example_data_dict = json.loads(example_data_json)
-        
-        return render_template('index.html', 
-                             example_data=example_data_dict,
+        return render_template('index.html',
+                             example_data=example_data,
                              show_analysis=True)
     except Exception as e:
         import traceback
         logger.error(f"Error loading example portfolio: {e}")
         traceback.print_exc()
-        return render_template('index.html', 
+        return render_template('index.html',
                              example_data=None,
                              show_analysis=False)
 
@@ -245,6 +267,32 @@ def reset_password_view(token):
     return render_template('auth/reset_password.html', token=token)
 
 
+@app.route('/auth/logout')
+def logout_view():
+    """Log out user and redirect to home."""
+    from flask import session, redirect, url_for
+    session.clear()
+    return redirect('/')
+
+
+@app.route('/profile')
+def profile_view():
+    """User profile page - requires login."""
+    from flask_login import login_required, current_user
+    from models.auth import User
+    
+    # Check if user is logged in via session
+    if 'user_id' not in session:
+        return redirect('/auth/login')
+    
+    user = User.query.get(session['user_id'])
+    if not user:
+        session.clear()
+        return redirect('/auth/login')
+    
+    return render_template('auth/profile.html', user=user)
+
+
 @app.route('/admin')
 def admin_view():
     """Admin dashboard."""
@@ -265,6 +313,73 @@ def admin_view():
                          all_users=all_users,
                          pending_users=pending_users,
                          stats=stats)
+
+
+@app.route('/admin/cache')
+def admin_cache_view():
+    """Cache management admin page."""
+    cache_info = example_portfolio_service.get_cache_info()
+    return render_template('auth/admin_cache.html', cache_info=cache_info)
+
+
+@app.route('/api/admin/cache/refresh', methods=['POST'])
+def admin_cache_refresh():
+    """
+    Admin endpoint to refresh the example portfolio cache.
+    This recomputes all analysis with fresh market data.
+    """
+    from flask_login import current_user
+    
+    # Check admin access
+    if not current_user.is_authenticated or not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        logger.info(f"Admin {current_user.email} requested cache refresh")
+        
+        # This will recompute everything and update disk cache
+        refreshed_data = example_portfolio_service.refresh_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Example portfolio cache refreshed successfully',
+            'computed_at': refreshed_data['meta']['computed_at'],
+            'cache_info': example_portfolio_service.get_cache_info()
+        })
+    except Exception as e:
+        logger.error(f"Cache refresh failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Cache refresh failed: {str(e)}'}), 500
+
+
+@app.route('/api/admin/cache/info')
+def admin_cache_info():
+    """Get current cache status."""
+    from flask_login import current_user
+    
+    if not current_user.is_authenticated or not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    return jsonify(example_portfolio_service.get_cache_info())
+
+
+@app.route('/api/admin/cache/clear', methods=['POST'])
+def admin_cache_clear():
+    """Clear the example portfolio cache."""
+    from flask_login import current_user
+    
+    if not current_user.is_authenticated or not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        example_portfolio_service.clear_cache()
+        return jsonify({
+            'success': True,
+            'message': 'Cache cleared successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # =============================================================================
@@ -970,6 +1085,16 @@ def comprehensive_portfolio_analysis():
                 name: (1 + returns).cumprod().tolist() 
                 for name, returns in benchmarks.items()
             } if benchmarks else {},
+            'holdings': [
+                {
+                    'ticker': t,
+                    'weight': float(w),
+                    'name': market_data_service.get_stock_info(t).get('name', t),
+                    'sector': market_data_service.get_stock_info(t).get('sector', 'Unknown'),
+                    'beta': market_data_service.get_stock_info(t).get('beta', 1.0)
+                }
+                for t, w in zip(tickers, w)
+            ],
             # Advanced Statistics - Distribution Analysis
             'distributions': {
                 name: {
@@ -983,6 +1108,14 @@ def comprehensive_portfolio_analysis():
                     'p_value': dist.p_value
                 }
                 for name, dist in distributions.items()
+            } if 'distributions' in locals() else {},
+            'returns_distribution': {
+                'returns': portfolio_returns.dropna().tolist(),
+                'best_fit': min(distributions.items(), key=lambda x: x[1].aic)[0] if distributions else 'Normal',
+                'var_95': metrics.var_95 if 'metrics' in locals() else None,
+                'x_values': np.linspace(portfolio_returns.min(), portfolio_returns.max(), 100).tolist(),
+                'pdf_fitted': [],  # Will be populated if we have fitted distribution
+                'pdf_normal': []
             } if 'distributions' in locals() else {},
             # Monte Carlo Simulation Results
             'monte_carlo': {
@@ -1025,7 +1158,11 @@ def comprehensive_portfolio_analysis():
                 'arch_lm_pvalue': vol_analysis.arch_lm_pvalue,
                 'vol_of_vol': vol_analysis.vol_of_vol,
                 'volatility_persistence': vol_analysis.volatility_persistence,
-                'half_life': vol_analysis.half_life
+                'half_life': vol_analysis.half_life,
+                'volatility_series': {
+                    'dates': portfolio_returns.index.strftime('%Y-%m-%d').tolist(),
+                    'values': (portfolio_returns.rolling(21).std() * np.sqrt(252)).tolist()
+                }
             } if 'vol_analysis' in locals() else {},
             # Tail Risk Analysis (Extreme Value Theory)
             'tail_risk': {
@@ -1055,7 +1192,47 @@ def comprehensive_portfolio_analysis():
                 'skewness': rolling_stats['skewness'].tolist(),
                 'kurtosis': rolling_stats['kurtosis'].tolist(),
                 'sharpe': rolling_stats['sharpe'].tolist()
-            } if 'rolling_stats' in locals() else {}
+            } if 'rolling_stats' in locals() else {},
+            # Charts data for visualization
+            'charts': {
+                'monte_carlo': dashboard_charts.get_monte_carlo_chart(
+                    portfolio_returns, 
+                    w, 
+                    n_paths=100, 
+                    n_days=252
+                ),
+                'rolling_stats_63d': dashboard_charts.get_rolling_statistics_chart(
+                    portfolio_returns, 
+                    window=63
+                ),
+                'pca': dashboard_charts.get_pca_chart(returns_df),
+                'drawdown': dashboard_charts.get_drawdown_chart(portfolio_returns),
+                'performance': dashboard_charts.get_performance_chart_data(
+                    portfolio_returns,
+                    returns_df.columns.tolist(),
+                    period=period
+                ),
+                'efficient_frontier': dashboard_charts.get_efficient_frontier_chart(
+                    returns_df, w
+                ),
+                'risk_contribution': dashboard_charts.get_risk_contribution_chart(
+                    returns_df, w
+                ),
+                'monthly_returns': dashboard_charts.get_monthly_returns_heatmap(
+                    portfolio_returns
+                ),
+                'rolling_correlation': dashboard_charts.get_rolling_correlation_chart(
+                    returns_df, window=90
+                )
+            },
+            # AI Research Insights
+            'ai_insights': generate_ai_insights(
+                metrics,
+                distributions if 'distributions' in locals() else {},
+                stat_tests if 'stat_tests' in locals() else None,
+                pca_result if 'pca_result' in locals() else None,
+                vol_analysis if 'vol_analysis' in locals() else None
+            )
         }
         
         # Sanitize data to ensure valid JSON (convert NaN/Infinity to null)
@@ -1064,6 +1241,109 @@ def comprehensive_portfolio_analysis():
     except Exception as e:
         logger.error(f"Comprehensive analysis error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def generate_ai_insights(metrics, distributions, stat_tests, pca_result, vol_analysis):
+    """
+    Generate AI-style quantitative research insights based on portfolio analysis.
+    
+    Returns structured insights for risk assessment, factor analysis, and recommendations.
+    """
+    insights = {
+        'risk_assessment': '',
+        'factor_analysis': '',
+        'recommendation': ''
+    }
+    
+    # Risk Assessment
+    sharpe = getattr(metrics, 'sharpe_ratio', 0)
+    sortino = getattr(metrics, 'sortino_ratio', 0)
+    max_dd = getattr(metrics, 'max_drawdown', 0)
+    volatility = getattr(metrics, 'volatility', 0)
+    
+    if sharpe > 1.2:
+        risk_level = "excellent"
+        risk_desc = "superior risk-adjusted returns with exceptional compensation for volatility"
+    elif sharpe > 0.8:
+        risk_level = "strong"
+        risk_desc = "solid risk-adjusted performance above market norms"
+    elif sharpe > 0.5:
+        risk_level = "moderate"
+        risk_desc = "adequate risk-adjusted returns"
+    else:
+        risk_level = "concerning"
+        risk_desc = "below-average risk-adjusted performance suggesting need for optimization"
+    
+    insights['risk_assessment'] = (
+        f"This portfolio demonstrates {risk_level} risk-adjusted returns with a Sharpe ratio of {sharpe:.2f}, "
+        f"indicating {risk_desc}. The Sortino ratio of {sortino:.2f} suggests "
+        f"{'effective' if sortino > sharpe * 1.1 else 'adequate'} downside risk management. "
+        f"Maximum drawdown of {max_dd*100:.1f}% occurred over {getattr(metrics, 'max_drawdown_duration', 'N/A')} days, "
+        f"testing investor conviction during stressed periods."
+    )
+    
+    # Factor Analysis
+    beta = getattr(metrics, 'beta', 1.0)
+    alpha = getattr(metrics, 'alpha', 0)
+    r_squared = getattr(metrics, 'r_squared', 0)
+    
+    if beta > 1.1:
+        beta_desc = "aggressive market exposure amplifying systematic movements"
+    elif beta < 0.9:
+        beta_desc = "defensive positioning reducing market sensitivity"
+    else:
+        beta_desc = "neutral market sensitivity aligned with benchmark"
+    
+    # Check distribution fit
+    best_dist = 'Normal'
+    if distributions:
+        try:
+            best_dist = min(distributions.items(), key=lambda x: x[1].aic)[0]
+        except:
+            pass
+    
+    insights['factor_analysis'] = (
+        f"Portfolio exhibits a market beta of {beta:.2f}, indicating {beta_desc}. "
+        f"Alpha generation of {alpha*100:.1f}% suggests {'positive' if alpha > 0 else 'negative'} "
+        f"security selection skill (R² = {r_squared:.2f}). "
+        f"Return distribution is best modeled by {best_dist} distribution. "
+    )
+    
+    if stat_tests:
+        insights['factor_analysis'] += (
+            f"Jarque-Bera test indicates returns are {'normally distributed' if stat_tests.is_normal else 'non-normal with fat tails'}. "
+        )
+    
+    if pca_result and hasattr(pca_result, 'explained_variance_ratio'):
+        pc1_var = pca_result.explained_variance_ratio[0] * 100
+        insights['factor_analysis'] += (
+            f"PCA reveals first principal component explains {pc1_var:.1f}% of variance."
+        )
+    
+    # Recommendation
+    recommendations = []
+    
+    if volatility > 0.25:
+        recommendations.append("High volatility suggests consideration of hedging strategies or defensive allocations")
+    
+    if stat_tests and not stat_tests.is_normal:
+        recommendations.append("Non-normal distribution detected - tail risk hedging recommended")
+    
+    if vol_analysis and getattr(vol_analysis, 'has_arch_effects', False):
+        recommendations.append("Volatility clustering detected - GARCH models may improve risk forecasting")
+    
+    if sharpe < 0.5:
+        recommendations.append("Consider rebalancing toward higher Sharpe ratio assets")
+    
+    if max_dd < -0.30:
+        recommendations.append("Severe drawdown potential - implement stop-loss or protective put strategies")
+    
+    if not recommendations:
+        recommendations.append("Portfolio structure appears sound - maintain current allocation with regular rebalancing")
+    
+    insights['recommendation'] = " ".join(recommendations)
+    
+    return insights
 
 
 @app.route('/api/example-portfolio', methods=['GET'])
@@ -1851,6 +2131,20 @@ def health_check():
         'version': '1.0.0',
         'database': config.DB_TYPE,
         'ai_enabled': config.ENABLE_AI_INSIGHTS
+    })
+
+
+@app.route('/api/debug/session')
+def debug_session():
+    """Debug endpoint to check session and auth status."""
+    from flask_login import current_user
+    
+    return jsonify({
+        'session_data': dict(session),
+        'is_authenticated': current_user.is_authenticated if current_user else False,
+        'user_id': current_user.id if current_user and current_user.is_authenticated else None,
+        'user_email': current_user.email if current_user and current_user.is_authenticated else None,
+        'user_obj': str(current_user) if current_user else None
     })
 
 
