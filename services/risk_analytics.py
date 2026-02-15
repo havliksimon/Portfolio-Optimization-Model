@@ -207,8 +207,12 @@ class RiskAnalytics:
         returns = returns.copy()
         if returns.index.tz is not None:
             returns.index = returns.index.tz_localize(None)
+        # Normalize timezones to avoid comparison issues
+        returns = returns.copy()
+        benchmark_returns = benchmark_returns.copy()
+        if returns.index.tz is not None:
+            returns.index = returns.index.tz_localize(None)
         if benchmark_returns.index.tz is not None:
-            benchmark_returns = benchmark_returns.copy()
             benchmark_returns.index = benchmark_returns.index.tz_localize(None)
         
         # Align dates
@@ -262,7 +266,14 @@ class RiskAnalytics:
         # Rolling beta if benchmark provided
         rolling_beta = pd.Series(index=returns.index, dtype=float)
         if benchmark_returns is not None:
-            aligned = pd.concat([returns, benchmark_returns], axis=1).dropna()
+            # Normalize timezone to avoid tz-naive vs tz-aware comparison issues
+            ret_norm = returns.copy()
+            bench_norm = benchmark_returns.copy()
+            if ret_norm.index.tz is not None:
+                ret_norm.index = ret_norm.index.tz_localize(None)
+            if bench_norm.index.tz is not None:
+                bench_norm.index = bench_norm.index.tz_localize(None)
+            aligned = pd.concat([ret_norm, bench_norm], axis=1).dropna()
             for i in range(window, len(aligned)):
                 period = aligned.iloc[i-window:i]
                 if len(period) >= window:

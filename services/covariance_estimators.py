@@ -282,7 +282,13 @@ class FactorCovarianceEstimator:
         
     def _fit_macro(self, returns: pd.DataFrame, factors: pd.DataFrame):
         """Fit using predefined macro factors."""
-        # Align dates
+        # Normalize timezones and align dates
+        returns = returns.copy()
+        factors = factors.copy()
+        if returns.index.tz is not None:
+            returns.index = returns.index.tz_localize(None)
+        if factors.index.tz is not None:
+            factors.index = factors.index.tz_localize(None)
         aligned = pd.concat([returns, factors], axis=1).dropna()
         
         R = aligned.iloc[:, :len(returns.columns)].values

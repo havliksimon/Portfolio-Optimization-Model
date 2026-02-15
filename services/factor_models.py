@@ -114,8 +114,14 @@ class FamaFrenchModel:
         if self.factor_data is None:
             self.fetch_factor_data(model)
         
-        # Align dates
-        aligned = pd.concat([returns, self.factor_data], axis=1).dropna()
+        # Normalize timezones and align dates
+        returns = returns.copy()
+        factor_data = self.factor_data.copy()
+        if returns.index.tz is not None:
+            returns.index = returns.index.tz_localize(None)
+        if factor_data.index.tz is not None:
+            factor_data.index = factor_data.index.tz_localize(None)
+        aligned = pd.concat([returns, factor_data], axis=1).dropna()
         
         if len(aligned) < 30:
             logger.warning(f"Insufficient data for factor regression: {len(aligned)} observations")
@@ -301,6 +307,13 @@ class RiskFactorDecomposition:
             y = self.returns[asset]
             X = sm.add_constant(self.factors)
             
+            # Normalize timezones
+            y = y.copy()
+            X = X.copy()
+            if y.index.tz is not None:
+                y.index = y.index.tz_localize(None)
+            if X.index.tz is not None:
+                X.index = X.index.tz_localize(None)
             aligned = pd.concat([y, X], axis=1).dropna()
             if len(aligned) < 30:
                 continue
