@@ -6,9 +6,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install gunicorn for production
-RUN pip install --no-cache-dir gunicorn
-
 # Copy app
 COPY . .
 
