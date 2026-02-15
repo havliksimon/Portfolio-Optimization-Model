@@ -11,10 +11,9 @@ COPY . .
 
 # Set environment
 ENV FLASK_APP=app.py
-ENV PORT=5000
 
-# Expose port
-EXPOSE 5000
+# Expose port (Koyeb uses 8000 by default)
+EXPOSE 8000
 
-# Run with gunicorn on port 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--timeout", "120", "app:app"]
+# Run with gunicorn - use PORT env var that Koyeb sets
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--timeout", "120", "app:app"]

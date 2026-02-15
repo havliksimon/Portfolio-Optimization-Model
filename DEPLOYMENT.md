@@ -31,7 +31,9 @@ SECRET_KEY=change-this-to-random-string-at-least-32-chars
 DATABASE_URL=<paste-your-neon-connection-string-here>
 ```
 
-5. Click **"Deploy"** → wait 2 minutes
+5. Click **"Deploy"** → wait 2-3 minutes
+
+> **Note:** Koyeb uses port 8000 by default. The Dockerfile is already configured to use this automatically.
 
 ---
 
