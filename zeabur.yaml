@@ -1,0 +1,29 @@
+# Zeabur deployment configuration
+# This file helps Zeabur understand how to build and deploy your service
+
+version: "1.0"
+
+services:
+  - name: portfolio-optimizer
+    type: web
+    
+    build:
+      type: docker
+      dockerfile: Dockerfile
+    
+    resources:
+      # Optimized for the multi-stage build which produces a smaller image
+      memory: 512Mi
+      
+    env:
+      - name: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - name: PYTHONUNBUFFERED
+        value: "1"
+      - name: PORT
+        value: "8000"
+    
+    health_check:
+      path: /api/health
+      port: 8000
+      initial_delay: 60

@@ -1,22 +1,82 @@
+# Python
 __pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
+*.py[cod]
+*$py.class
 *.so
+.Python
 *.egg
 *.egg-info
 dist
 build
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Git
 .git
 .gitignore
+.gitattributes
+
+# Environment & config
 .env
-.venv
-venv/
-ENV/
-.pytest_cache
+.env.example
+.env.local
+.flaskenv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing & CI
+.pytest_cache/
 .coverage
 htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+tests/
+test_*.py
+*_test.py
+
+# Documentation - excluded from Docker (kept on GitHub only)
+*.md
+ADVANCED_FEATURES.md
+DEPLOYMENT.md
+README.md
+LICENSE
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Scripts
+setup_arch.sh
+install_arch.sh
+check_python.py
+
+# Local data (keep structure but not content)
 *.db
 *.sqlite
+*.sqlite3
+data/*.csv
+data/*.json
+data/*.xlsx
+data/uploads/*
+instance/*.db
+instance/*.sqlite
+
+# Misc
 .DS_Store
+*.log
+logs/
+tmp/
+temp/
